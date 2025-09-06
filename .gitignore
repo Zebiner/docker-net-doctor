@@ -1,0 +1,37 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+docker-net-doctor
+
+# Test and coverage files
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Vendor directory (if you use vendoring)
+vendor/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+
+# Distribution
+dist/
+*.tar.gz
+*.zip
