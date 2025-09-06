@@ -3,7 +3,6 @@ package diagnostics
 
 import (
     "context"
-    "fmt"
     "time"
     
     // When you create the docker package, you'll import it like this:

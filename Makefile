@@ -72,3 +72,9 @@ deps:
 ## run: Run the tool directly
 run: build
 	@./bin/$(BINARY_NAME)
+
+## fmt: Format all Go code and fix imports
+fmt:
+	@echo "Formatting code and fixing imports..."
+	@goimports -w .
+	@echo "Code formatting complete"
