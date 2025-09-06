@@ -48,10 +48,10 @@ The easiest way to install Docker Network Doctor is using our installation scrip
 
 ```bash
 # Install for current user (recommended for developers)
-curl -sSL https://raw.githubusercontent.com/yourusername/docker-net-doctor/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/zebiner/docker-net-doctor/main/install.sh | bash
 
 # Install system-wide (requires sudo, recommended for servers)
-curl -sSL https://raw.githubusercontent.com/yourusername/docker-net-doctor/main/install.sh | bash -s -- --system
+curl -sSL https://raw.githubusercontent.com/zebiner/docker-net-doctor/main/install.sh | bash -s -- --system
 ```
 
 The installation script performs several important checks before installing. It verifies that Docker is installed and running, creates the necessary plugin directory if it doesn't exist, downloads the correct binary for your platform, and verifies the installation succeeded. If anything goes wrong, you'll get clear error messages explaining the problem.
@@ -60,7 +60,7 @@ The installation script performs several important checks before installing. It 
 
 If you prefer to understand exactly what's being installed, you can perform a manual installation. This approach gives you complete control over the process.
 
-First, download the appropriate binary for your platform from the [releases page](https://github.com/yourusername/docker-net-doctor/releases). The binaries follow the naming pattern `docker-net-doctor-{os}-{architecture}`. For example, Linux users on standard x86_64 hardware would download `docker-net-doctor-linux-amd64`.
+First, download the appropriate binary for your platform from the [releases page](https://github.com/zebiner/docker-net-doctor/releases). The binaries follow the naming pattern `docker-net-doctor-{os}-{architecture}`. For example, Linux users on standard x86_64 hardware would download `docker-net-doctor-linux-amd64`.
 
 Next, install the binary as a Docker CLI plugin:
 
@@ -84,7 +84,7 @@ Building from source gives you the latest development version and allows you to 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/docker-net-doctor.git
+git clone https://github.com/zebiner/docker-net-doctor.git
 cd docker-net-doctor
 
 # Download dependencies
@@ -110,11 +110,11 @@ If you prefer not to install anything on your host system, you can run Docker Ne
 # Run diagnostics using the Docker image
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  yourusername/docker-net-doctor:latest \
+  zebiner/docker-net-doctor:latest \
   diagnose
 
 # Create an alias for convenience
-alias docker-net-doctor='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock yourusername/docker-net-doctor:latest'
+alias docker-net-doctor='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock zebiner/docker-net-doctor:latest'
 ```
 
 Note that running as a container requires mounting the Docker socket, which grants the container full access to Docker. Only use this method with trusted images.
