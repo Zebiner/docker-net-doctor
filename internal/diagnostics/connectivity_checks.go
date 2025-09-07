@@ -1,3 +1,4 @@
+// internal/diagnostics/connectivity_checks.go
 package diagnostics
 
 import (
@@ -10,7 +11,7 @@ import (
 	"github.com/zebiner/docker-net-doctor/internal/docker"
 )
 
-// ContainerConnectivityCheck tests basic connectivity between containers
+// ContainerConnectivityCheck verifies that containers can communicate with each other
 type ContainerConnectivityCheck struct{}
 
 func (c *ContainerConnectivityCheck) Name() string {
@@ -18,7 +19,7 @@ func (c *ContainerConnectivityCheck) Name() string {
 }
 
 func (c *ContainerConnectivityCheck) Description() string {
-	return "Testing network connectivity between containers"
+	return "Checking connectivity between containers on the same network"
 }
 
 func (c *ContainerConnectivityCheck) Severity() Severity {
@@ -28,88 +29,101 @@ func (c *ContainerConnectivityCheck) Severity() Severity {
 func (c *ContainerConnectivityCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
 	result := &CheckResult{
 		CheckName:   c.Name(),
+		Success:     true,
 		Timestamp:   time.Now(),
 		Details:     make(map[string]interface{}),
 		Suggestions: make([]string, 0),
 	}
 
-	// Get all running containers grouped by network
-	networks, err := client.GetNetworkInfo()
+	// Get all running containers
+	containers, err := client.ListContainers(ctx)
 	if err != nil {
+		result.Success = false
+		result.Message = fmt.Sprintf("Failed to list containers: %v", err)
 		return result, err
 	}
 
-	connectivityTests := make([]string, 0)
-	failedTests := 0
+	if len(containers) < 2 {
+		result.Message = "Need at least 2 containers to test connectivity"
+		result.Details["container_count"] = len(containers)
+		return result, nil
+	}
 
-	for _, network := range networks {
-		if len(network.Containers) < 2 {
-			continue
-		}
-
-		// Test connectivity between first two containers
-		var testPair []docker.ContainerEndpoint
-		for _, container := range network.Containers {
-			testPair = append(testPair, container)
-			if len(testPair) >= 2 {
-				break
-			}
-		}
-
-		// Extract IP from IPv4Address (format: "IP/prefix")
-		sourceIP := strings.Split(testPair[0].IPv4Address, "/")[0]
-		targetIP := strings.Split(testPair[1].IPv4Address, "/")[0]
-
-		if sourceIP != "" && targetIP != "" {
-			// Test ICMP connectivity
-			testResult, err := client.ExecInContainer(ctx, testPair[0].Name,
-				[]string{"ping", "-c", "1", "-W", "2", targetIP})
-
-			testName := fmt.Sprintf("%s->%s on %s",
-				testPair[0].Name, testPair[1].Name, network.Name)
-
-			if err != nil || strings.Contains(testResult, "100% packet loss") {
-				failedTests++
-				connectivityTests = append(connectivityTests,
-					fmt.Sprintf("FAILED: %s", testName))
-
-				// Provide network-specific suggestions
-				if network.Name == "bridge" {
-					result.Suggestions = append(result.Suggestions,
-						"Default bridge network has limited connectivity features",
-						"Consider using a custom network for better isolation and DNS")
-				}
-			} else {
-				connectivityTests = append(connectivityTests,
-					fmt.Sprintf("SUCCESS: %s", testName))
-			}
+	// Group containers by network
+	networkGroups := make(map[string][]string) // network -> container IDs
+	for _, container := range containers {
+		for netName := range container.NetworkSettings.Networks {
+			networkGroups[netName] = append(networkGroups[netName], container.ID[:12])
 		}
 	}
 
-	result.Details["connectivity_tests"] = connectivityTests
-	result.Details["total_tests"] = len(connectivityTests)
-	result.Details["failed_tests"] = failedTests
+	// Test connectivity within each network
+	connectivityIssues := 0
+	totalTests := 0
 
-	if failedTests > 0 {
+	for network, containerIDs := range networkGroups {
+		if len(containerIDs) < 2 {
+			continue // Need at least 2 containers in the network
+		}
+
+		// Test connectivity between first and second container
+		sourceContainer := containerIDs[0]
+		targetContainer := containerIDs[1]
+		totalTests++
+
+		// Get target container's IP address
+		targetInfo, err := client.GetContainerNetworkConfig(targetContainer)
+		if err != nil {
+			connectivityIssues++
+			result.Details[fmt.Sprintf("error_%s", targetContainer)] = err.Error()
+			continue
+		}
+
+		var targetIP string
+		if netEndpoint, ok := targetInfo.Networks[network]; ok {
+			targetIP = netEndpoint.IPAddress
+		}
+
+		if targetIP == "" {
+			connectivityIssues++
+			result.Details[fmt.Sprintf("no_ip_%s", targetContainer)] = "No IP address found"
+			continue
+		}
+
+		// Ping test from source to target
+		output, err := client.ExecInContainer(ctx, sourceContainer,
+			[]string{"ping", "-c", "1", "-W", "2", targetIP})
+
+		if err != nil || !strings.Contains(output, "1 received") {
+			connectivityIssues++
+			result.Details[fmt.Sprintf("ping_%s_to_%s", sourceContainer, targetContainer)] = "Failed"
+			result.Suggestions = append(result.Suggestions,
+				fmt.Sprintf("Check if containers %s and %s are properly connected to network %s",
+					sourceContainer, targetContainer, network))
+		} else {
+			result.Details[fmt.Sprintf("ping_%s_to_%s", sourceContainer, targetContainer)] = "Success"
+		}
+	}
+
+	result.Details["total_tests"] = totalTests
+	result.Details["failed_tests"] = connectivityIssues
+
+	if connectivityIssues > 0 {
 		result.Success = false
-		result.Message = fmt.Sprintf("%d/%d connectivity tests failed",
-			failedTests, len(connectivityTests))
+		result.Message = fmt.Sprintf("Container connectivity issues detected: %d/%d tests failed",
+			connectivityIssues, totalTests)
 		result.Suggestions = append(result.Suggestions,
-			"Check if containers are on the same network",
-			"Verify iptables rules aren't blocking traffic",
-			"Ensure network isolation settings are correct")
-	} else if len(connectivityTests) == 0 {
-		result.Success = true
-		result.Message = "No multi-container networks to test"
+			"Ensure containers are on the same network",
+			"Check network isolation settings",
+			"Verify firewall rules are not blocking container communication")
 	} else {
-		result.Success = true
-		result.Message = "All container connectivity tests passed"
+		result.Message = fmt.Sprintf("All container connectivity tests passed (%d tests)", totalTests)
 	}
 
 	return result, nil
 }
 
-// PortBindingCheck verifies port bindings are correctly configured
+// PortBindingCheck validates port bindings and accessibility
 type PortBindingCheck struct{}
 
 func (c *PortBindingCheck) Name() string {
@@ -130,97 +144,97 @@ func (c *PortBindingCheck) Run(ctx context.Context, client *docker.Client) (*Che
 		Timestamp:   time.Now(),
 		Details:     make(map[string]interface{}),
 		Suggestions: make([]string, 0),
+		Success:     true,
 	}
 
 	containers, err := client.ListContainers(ctx)
 	if err != nil {
+		result.Success = false
+		result.Message = fmt.Sprintf("Failed to list containers: %v", err)
 		return result, err
 	}
 
 	portConflicts := make(map[string][]string) // port -> containers using it
 	issues := 0
+	checkedPorts := 0
 
 	for _, container := range containers {
-		containerInfo, err := client.GetContainerNetworkConfig(container.ID)
-		if err != nil {
+		// Check if container has any exposed ports
+		if container.Ports == nil || len(container.Ports) == 0 {
 			continue
 		}
 
-		for port, bindings := range containerInfo.PortBindings {
-			for _, binding := range bindings {
-				hostPort := binding.HostPort
-				if hostPort == "" {
-					continue
-				}
+		for _, port := range container.Ports {
+			if port.PublicPort == 0 {
+				continue // No public port mapping
+			}
 
-				// Check for port conflicts
-				key := fmt.Sprintf("%s:%s", binding.HostIP, hostPort)
-				if binding.HostIP == "" || binding.HostIP == "0.0.0.0" {
-					key = hostPort // All interfaces
-				}
+			checkedPorts++
+			
+			// Build the port key for conflict detection
+			portKey := fmt.Sprintf("%d/%s", port.PublicPort, port.Type)
+			if port.IP != "" && port.IP != "0.0.0.0" {
+				portKey = fmt.Sprintf("%s:%s", port.IP, portKey)
+			}
 
-				portConflicts[key] = append(portConflicts[key], container.Names[0])
+			// Track port usage
+			containerName := container.Names[0]
+			if len(containerName) > 0 && containerName[0] == '/' {
+				containerName = containerName[1:] // Remove leading slash
+			}
+			portConflicts[portKey] = append(portConflicts[portKey], containerName)
 
-				// Test if port is actually accessible
-				hostIP := binding.HostIP
-				if hostIP == "" || hostIP == "0.0.0.0" {
-					hostIP = "127.0.0.1"
-				}
+			// Test if port is actually accessible
+			hostIP := port.IP
+			if hostIP == "" || hostIP == "0.0.0.0" {
+				hostIP = "127.0.0.1"
+			}
 
-				// Check if port is listening (simplified check)
-				conn, err := net.DialTimeout("tcp",
-					fmt.Sprintf("%s:%s", hostIP, hostPort),
-					2*time.Second)
+			// Check if port is listening (simplified check)
+			address := fmt.Sprintf("%s:%d", hostIP, port.PublicPort)
+			conn, err := net.DialTimeout("tcp", address, 2*time.Second)
 
-				if err != nil {
-					issues++
-					result.Details[fmt.Sprintf("port_%s_%s", container.Names[0], port)] =
-						fmt.Sprintf("Port %s not accessible: %v", hostPort, err)
-				} else {
-					conn.Close()
-					result.Details[fmt.Sprintf("port_%s_%s", container.Names[0], port)] =
-						fmt.Sprintf("Port %s accessible", hostPort)
-				}
+			if err != nil {
+				issues++
+				result.Details[fmt.Sprintf("port_%s_%d", containerName, port.PublicPort)] =
+					fmt.Sprintf("Port %d not accessible: %v", port.PublicPort, err)
+				result.Suggestions = append(result.Suggestions,
+					fmt.Sprintf("Check if container %s is running and healthy", containerName))
+			} else {
+				conn.Close()
+				result.Details[fmt.Sprintf("port_%s_%d", containerName, port.PublicPort)] = "Accessible"
 			}
 		}
 	}
 
-	// Check for conflicts
-	conflicts := make([]string, 0)
+	// Check for port conflicts
+	conflictCount := 0
 	for port, containers := range portConflicts {
 		if len(containers) > 1 {
-			conflicts = append(conflicts,
-				fmt.Sprintf("Port %s used by: %s", port, strings.Join(containers, ", ")))
+			conflictCount++
+			result.Details[fmt.Sprintf("conflict_%s", port)] = containers
+			result.Suggestions = append(result.Suggestions,
+				fmt.Sprintf("Port conflict on %s: used by %v", port, containers))
 		}
 	}
 
-	if len(conflicts) > 0 {
+	result.Details["ports_checked"] = checkedPorts
+	result.Details["ports_with_issues"] = issues
+	result.Details["port_conflicts"] = conflictCount
+
+	if issues > 0 || conflictCount > 0 {
 		result.Success = false
-		result.Message = "Port binding conflicts detected"
-		result.Details["conflicts"] = conflicts
+		result.Message = fmt.Sprintf("Port binding issues detected: %d inaccessible, %d conflicts",
+			issues, conflictCount)
 		result.Suggestions = append(result.Suggestions,
-			"Multiple containers trying to bind to the same port",
-			"Use different host ports for each container",
-			"Consider using a reverse proxy (nginx, traefik) instead")
-	} else if issues > 0 {
-		result.Success = false
-		result.Message = fmt.Sprintf("%d port binding issues detected", issues)
-		result.Suggestions = append(result.Suggestions,
-			"Some bound ports are not accessible",
-			"Check if the application inside the container is running",
-			"Verify firewall rules allow traffic to these ports")
+			"Ensure containers are running and healthy",
+			"Check firewall rules for blocked ports",
+			"Resolve port conflicts by using different port mappings")
+	} else if checkedPorts == 0 {
+		result.Message = "No exposed ports found to check"
 	} else {
-		result.Success = true
-		result.Message = "All port bindings are correctly configured"
+		result.Message = fmt.Sprintf("All %d exposed ports are accessible and conflict-free", checkedPorts)
 	}
 
 	return result, nil
-}
-
-// Helper function for minimum
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
