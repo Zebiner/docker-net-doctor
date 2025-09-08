@@ -23,7 +23,7 @@ const (
 	MAX_TOTAL_TIMEOUT    = 2 * time.Minute         // Total execution timeout
 	DOCKER_API_RATE_LIMIT = 5                     // 5 calls/second
 	DOCKER_API_BURST     = 10                     // Burst of 10 calls
-	MAX_MEMORY_MB        = 100                    // Maximum additional memory overhead
+	MAX_MEMORY_MB        = 500                    // Maximum additional memory overhead
 )
 
 // Job represents a diagnostic check to be executed

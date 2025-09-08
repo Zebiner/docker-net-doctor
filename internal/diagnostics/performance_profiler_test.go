@@ -172,6 +172,7 @@ func TestConcurrentProfiling(t *testing.T) {
 // TestPercentileCalculation tests percentile calculations
 func TestPercentileCalculation(t *testing.T) {
 	profiler := NewPerformanceProfiler(&ProfileConfig{
+		Enabled: true,
 		EnablePercentiles: true,
 	})
 	
@@ -323,6 +324,7 @@ func TestWorkerPoolIntegration(t *testing.T) {
 // TestMemoryUsageTracking tests memory usage tracking
 func TestMemoryUsageTracking(t *testing.T) {
 	profiler := NewPerformanceProfiler(&ProfileConfig{
+		Enabled: true,
 		EnableTrends:    true,
 		RealtimeMetrics: true,
 	})
@@ -366,6 +368,7 @@ func TestMemoryUsageTracking(t *testing.T) {
 // TestReportGeneration tests report generation
 func TestReportGeneration(t *testing.T) {
 	profiler := NewPerformanceProfiler(&ProfileConfig{
+		Enabled: true,
 		EnablePercentiles: true,
 	})
 
