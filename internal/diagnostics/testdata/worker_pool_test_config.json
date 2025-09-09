@@ -1,0 +1,26 @@
+{
+  "test_configurations": {
+    "circuit_breaker": {
+      "error_threshold": 0.5,
+      "success_threshold": 0.8,
+      "window_duration": "1m",
+      "min_samples": 10
+    },
+    "memory_management": {
+      "max_memory_mb": 100,
+      "check_interval": "1s",
+      "leak_detection": true
+    },
+    "performance": {
+      "worker_counts": [1, 2, 4, 8, 16],
+      "job_counts": [100, 500, 1000],
+      "timeout": "30s"
+    },
+    "security": {
+      "isolation_tests": true,
+      "payload_validation": true,
+      "resource_limits": true,
+      "audit_logging": true
+    }
+  }
+}

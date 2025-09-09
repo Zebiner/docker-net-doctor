@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "security_policies": {
+    "validation_rules": {
+      "check_name_validation": {
+        "enabled": true,
+        "severity": "critical",
+        "max_length": 100,
+        "allowed_patterns": ["^[a-zA-Z0-9_-]+$"],
+        "forbidden_patterns": ["\\.\\.", "\\$\\(", "\\$\\{", "`", "\\|", ";", "&", ">", "<"]
+      },
+      "check_description_validation": {
+        "enabled": true,
+        "severity": "warning", 
+        "max_length": 500,
+        "forbidden_patterns": ["<script", "javascript:", "onerror=", "onclick=", "onload="]
+      },
+      "check_severity_validation": {
+        "enabled": true,
+        "severity": "info",
+        "min_severity": 0,
+        "max_severity": 2
+      }
+    },
+    "allowlist": {
+      "default_checks": [
+        "daemon_connectivity",
+        "bridge_network", 
+        "ip_forwarding",
+        "iptables",
+        "dns_resolution",
+        "internal_dns",
+        "container_connectivity",
+        "port_binding",
+        "network_isolation",
+        "mtu_consistency",
+        "subnet_overlap"
+      ],
+      "custom_patterns": [
+        "test_*",
+        "mock_*",
+        "debug_*"
+      ]
+    },
+    "denylist": {
+      "dangerous_patterns": [
+        "*admin*",
+        "*root*", 
+        "*system*",
+        "*config*password*",
+        "*secret*"
+      ],
+      "injection_patterns": [
+        "*$(*)* ",
+        "*${*}*",
+        "*`*`*",
+        "*;*",
+        "*|*",
+        "*>*",
+        "*<*"
+      ]
+    },
+    "audit": {
+      "enabled": true,
+      "max_history_size": 1000,
+      "log_levels": ["info", "warning", "error"],
+      "retention_days": 30
+    }
+  }
+}

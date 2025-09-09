@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "security_policies": {
+    "validation_rules": {
+      "check_name_validation": {
+        "enabled": true,
+        "severity": "critical"
+        // Missing comma - malformed JSON
+        "max_length": 100
+      }
+    }
+  }
+}

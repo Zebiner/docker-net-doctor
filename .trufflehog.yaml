@@ -1,0 +1,79 @@
+# .trufflehog.yaml - Configuration for TruffleHog secret scanner
+
+# Include patterns (default: all files)
+include:
+  - "**/*.go"
+  - "**/*.json"
+  - "**/*.yaml"
+  - "**/*.yml"
+  - "**/*.toml"
+  - "**/*.env*"
+  - "**/config/**"
+  - "**/configs/**"
+
+# Exclude patterns
+exclude:
+  - "vendor/**"
+  - "node_modules/**"
+  - ".git/**"
+  - "**/*_test.go"
+  - "testdata/**"
+  - "test/**"
+  - "*.md"
+  - "docs/**"
+  - "bin/**"
+  - "dist/**"
+  - "*.out"
+  - "coverage.html"
+
+# Detectors to enable (leave empty for all)
+detectors:
+  - aws
+  - github
+  - gitlab
+  - docker
+  - gcp
+  - azure
+  - slack
+  - discord
+  - telegram
+  - generic_api_key
+  - private_key
+
+# Verification settings
+verify: true  # Verify secrets by attempting to use them
+
+# Only show verified secrets
+only_verified: false
+
+# Configure specific detectors
+detector_configs:
+  github:
+    endpoint: "https://api.github.com"
+    skip_unverified: false
+  aws:
+    skip_unverified: false
+
+# Custom regexes for organization-specific secrets
+custom_detectors:
+  - name: "Docker Registry Token"
+    regex: 'docker_registry_token\s*[:=]\s*["\']?([a-zA-Z0-9_-]{20,})["\']?'
+    keywords:
+      - "docker_registry_token"
+      - "registry_token"
+
+# Log level (trace, debug, info, warn, error, fatal, panic)
+log_level: "info"
+
+# Output format (json, yaml, text)
+output_format: "json"
+
+# Archive settings
+archive:
+  max_depth: 50
+  timeout: "30s"
+
+# Git settings
+git:
+  max_depth: 100
+  bare: false

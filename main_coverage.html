@@ -1,0 +1,469 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>docker-net-doctor: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/zebiner/docker-net-doctor/cmd/docker-net-doctor/main.go (13.5%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
+
+    "github.com/spf13/cobra"
+    "github.com/zebiner/docker-net-doctor/internal/diagnostics"
+    "github.com/zebiner/docker-net-doctor/internal/docker"
+    "gopkg.in/yaml.v3"
+)
+
+// Version information - set during build
+var (
+    Version   = "dev"
+    BuildTime = "unknown"
+    GitCommit = "unknown"
+)
+
+// Global flags
+var (
+    outputFormat string
+    verbose      bool
+    timeout      time.Duration
+)
+
+func main() <span class="cov0" title="0">{
+    // Detect if we're running as a Docker CLI plugin
+    execName := filepath.Base(os.Args[0])
+    isPlugin := execName == "docker-net-doctor" || execName == "docker-netdoctor" || execName == "docker-network-doctor"
+    
+    // Create the root command
+    rootCmd := &amp;cobra.Command{
+        Use:   "netdoctor",
+        Short: "Diagnose and troubleshoot Docker networking issues",
+        Long: `Docker Network Doctor is a comprehensive diagnostic tool that 
+automatically detects and suggests solutions for common Docker networking problems.`,
+        Version: fmt.Sprintf("%s (built %s, commit %s)", Version, BuildTime, GitCommit),
+    }
+
+    // Add Docker plugin metadata if running as a plugin
+    if isPlugin </span><span class="cov0" title="0">{
+        rootCmd.Annotations = map[string]string{
+            "DockerPlugin":        "true",
+            "DockerPluginVersion": Version,
+        }
+    }</span>
+    
+    // Add global flags
+    <span class="cov0" title="0">rootCmd.PersistentFlags().StringVarP(&amp;outputFormat, "output", "o", "table", "Output format (table, json, yaml)")
+    rootCmd.PersistentFlags().BoolVarP(&amp;verbose, "verbose", "v", false, "Enable verbose output")
+    rootCmd.PersistentFlags().DurationVar(&amp;timeout, "timeout", 30*time.Second, "Timeout for diagnostics")
+
+    // Add Docker CLI plugin metadata command if requested
+    if len(os.Args) &gt; 1 &amp;&amp; os.Args[1] == "docker-cli-plugin-metadata" </span><span class="cov0" title="0">{
+        printPluginMetadata()
+        os.Exit(0)
+    }</span>
+
+    // Add subcommands
+    <span class="cov0" title="0">rootCmd.AddCommand(createDiagnoseCommand())
+    rootCmd.AddCommand(createCheckCommand())
+    rootCmd.AddCommand(createReportCommand())
+
+    // Execute the root command
+    if err := rootCmd.Execute(); err != nil </span><span class="cov0" title="0">{
+        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+        os.Exit(1)
+    }</span>
+}
+
+// createDiagnoseCommand creates the diagnose subcommand
+func createDiagnoseCommand() *cobra.Command <span class="cov8" title="1">{
+    var (
+        containerFilter string
+        networkFilter   string
+        parallel        bool
+    )
+
+    cmd := &amp;cobra.Command{
+        Use:   "diagnose",
+        Short: "Run comprehensive Docker networking diagnostics",
+        Long: `Run a comprehensive suite of Docker networking diagnostic checks.
+This command will examine your Docker networking configuration and identify
+common issues that prevent containers from communicating properly.`,
+        RunE: func(cmd *cobra.Command, args []string) error </span><span class="cov0" title="0">{
+            return runDiagnostics(containerFilter, networkFilter, parallel)
+        }</span>,
+    }
+
+    <span class="cov8" title="1">cmd.Flags().StringVarP(&amp;containerFilter, "container", "c", "", "Filter diagnostics to specific container")
+    cmd.Flags().StringVarP(&amp;networkFilter, "network", "n", "", "Filter diagnostics to specific network")
+    cmd.Flags().BoolVarP(&amp;parallel, "parallel", "p", true, "Run checks in parallel")
+
+    return cmd</span>
+}
+
+// createCheckCommand creates the check subcommand
+func createCheckCommand() *cobra.Command <span class="cov8" title="1">{
+    cmd := &amp;cobra.Command{
+        Use:   "check [CHECK_TYPE]",
+        Short: "Run specific diagnostic check",
+        Long: `Run a specific type of diagnostic check instead of the full suite.
+Available check types: dns, bridge, connectivity, ports, iptables, etc.`,
+        ValidArgs: []string{"dns", "bridge", "connectivity", "ports", "iptables", "forwarding", "mtu", "overlap"},
+        RunE: func(cmd *cobra.Command, args []string) error </span><span class="cov0" title="0">{
+            if len(args) == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("please specify a check type")
+            }</span>
+            <span class="cov0" title="0">return runSpecificCheck(args[0])</span>
+        },
+    }
+
+    <span class="cov8" title="1">return cmd</span>
+}
+
+// createReportCommand creates the report subcommand
+func createReportCommand() *cobra.Command <span class="cov8" title="1">{
+    var (
+        outputFile    string
+        includeSystem bool
+        includeLogs   bool
+    )
+
+    cmd := &amp;cobra.Command{
+        Use:   "report",
+        Short: "Generate detailed diagnostic report",
+        Long: `Generate a comprehensive report of your Docker networking configuration
+and diagnostic results. This is useful for sharing with support or colleagues.`,
+        RunE: func(cmd *cobra.Command, args []string) error </span><span class="cov0" title="0">{
+            return generateReport(outputFile, includeSystem, includeLogs)
+        }</span>,
+    }
+
+    <span class="cov8" title="1">cmd.Flags().StringVarP(&amp;outputFile, "output-file", "f", "", "Save report to file (default: stdout)")
+    cmd.Flags().BoolVar(&amp;includeSystem, "include-system", false, "Include system configuration in report")
+    cmd.Flags().BoolVar(&amp;includeLogs, "include-logs", false, "Include container logs in report")
+
+    return cmd</span>
+}
+
+// runDiagnostics executes the diagnostic engine
+func runDiagnostics(containerFilter, networkFilter string, parallel bool) error <span class="cov0" title="0">{
+    ctx, cancel := context.WithTimeout(context.Background(), timeout)
+    defer cancel()
+
+    if verbose </span><span class="cov0" title="0">{
+        fmt.Println("Connecting to Docker daemon...")
+    }</span>
+
+    // Create Docker client
+    <span class="cov0" title="0">dockerClient, err := docker.NewClient(ctx)
+    if err != nil </span><span class="cov0" title="0">{
+        return fmt.Errorf("failed to connect to Docker daemon: %w", err)
+    }</span>
+    <span class="cov0" title="0">defer dockerClient.Close()
+
+    // Configure diagnostic engine
+    config := &amp;diagnostics.Config{
+        Parallel:     parallel,
+        Timeout:      timeout,
+        Verbose:      verbose,
+        TargetFilter: containerFilter, // For now, use container filter as target
+    }
+
+    if verbose </span><span class="cov0" title="0">{
+        fmt.Printf("Running diagnostics with config: parallel=%v, timeout=%v\n", parallel, timeout)
+    }</span>
+
+    // Create and run diagnostic engine
+    <span class="cov0" title="0">engine := diagnostics.NewEngine(dockerClient, config)
+    results, err := engine.Run(ctx)
+    if err != nil </span><span class="cov0" title="0">{
+        return fmt.Errorf("diagnostic engine failed: %w", err)
+    }</span>
+
+    <span class="cov0" title="0">return outputResults(results)</span>
+}
+
+// runSpecificCheck runs a single diagnostic check
+func runSpecificCheck(checkType string) error <span class="cov0" title="0">{
+    ctx, cancel := context.WithTimeout(context.Background(), timeout)
+    defer cancel()
+
+    // Create Docker client
+    dockerClient, err := docker.NewClient(ctx)
+    if err != nil </span><span class="cov0" title="0">{
+        return fmt.Errorf("failed to connect to Docker daemon: %w", err)
+    }</span>
+    <span class="cov0" title="0">defer dockerClient.Close()
+
+    // Map check type to actual check implementation
+    var check diagnostics.Check
+    switch strings.ToLower(checkType) </span>{
+    case "dns":<span class="cov0" title="0">
+        check = &amp;diagnostics.DNSResolutionCheck{}</span>
+    case "bridge":<span class="cov0" title="0">
+        check = &amp;diagnostics.BridgeNetworkCheck{}</span>
+    case "connectivity":<span class="cov0" title="0">
+        check = &amp;diagnostics.ContainerConnectivityCheck{}</span>
+    case "ports":<span class="cov0" title="0">
+        check = &amp;diagnostics.PortBindingCheck{}</span>
+    case "iptables":<span class="cov0" title="0">
+        check = &amp;diagnostics.IptablesCheck{}</span>
+    case "forwarding":<span class="cov0" title="0">
+        check = &amp;diagnostics.IPForwardingCheck{}</span>
+    case "mtu":<span class="cov0" title="0">
+        check = &amp;diagnostics.MTUConsistencyCheck{}</span>
+    case "overlap":<span class="cov0" title="0">
+        check = &amp;diagnostics.SubnetOverlapCheck{}</span>
+    default:<span class="cov0" title="0">
+        return fmt.Errorf("unknown check type: %s", checkType)</span>
+    }
+
+    <span class="cov0" title="0">if verbose </span><span class="cov0" title="0">{
+        fmt.Printf("Running check: %s\n", check.Description())
+    }</span>
+
+    // Run the specific check
+    <span class="cov0" title="0">result, err := check.Run(ctx, dockerClient)
+    if err != nil </span><span class="cov0" title="0">{
+        return fmt.Errorf("check failed: %w", err)
+    }</span>
+
+    // Create results structure for output
+    <span class="cov0" title="0">results := &amp;diagnostics.Results{
+        Checks:   []*diagnostics.CheckResult{result},
+        Duration: time.Second, // Placeholder
+        Summary: diagnostics.Summary{
+            TotalChecks:  1,
+            PassedChecks: 0,
+            FailedChecks: 0,
+        },
+    }
+
+    if result.Success </span><span class="cov0" title="0">{
+        results.Summary.PassedChecks = 1
+    }</span> else<span class="cov0" title="0"> {
+        results.Summary.FailedChecks = 1
+    }</span>
+
+    <span class="cov0" title="0">return outputResults(results)</span>
+}
+
+// generateReport creates a comprehensive diagnostic report
+func generateReport(outputFile string, includeSystem, includeLogs bool) error <span class="cov0" title="0">{
+    // For now, run diagnostics and format as detailed report
+    if err := runDiagnostics("", "", true); err != nil </span><span class="cov0" title="0">{
+        return err
+    }</span>
+
+    <span class="cov0" title="0">if outputFile != "" </span><span class="cov0" title="0">{
+        fmt.Printf("Report would be saved to: %s\n", outputFile)
+    }</span>
+
+    <span class="cov0" title="0">if includeSystem </span><span class="cov0" title="0">{
+        fmt.Println("System information would be included")
+    }</span>
+
+    <span class="cov0" title="0">if includeLogs </span><span class="cov0" title="0">{
+        fmt.Println("Container logs would be included")
+    }</span>
+
+    <span class="cov0" title="0">return nil</span>
+}
+
+// outputResults formats and displays diagnostic results
+func outputResults(results *diagnostics.Results) error <span class="cov0" title="0">{
+    switch strings.ToLower(outputFormat) </span>{
+    case "json":<span class="cov0" title="0">
+        return outputJSON(results)</span>
+    case "yaml":<span class="cov0" title="0">
+        return outputYAML(results)</span>
+    case "table":<span class="cov0" title="0">
+        return outputTable(results)</span>
+    default:<span class="cov0" title="0">
+        return fmt.Errorf("unsupported output format: %s", outputFormat)</span>
+    }
+}
+
+// outputJSON outputs results in JSON format
+func outputJSON(results *diagnostics.Results) error <span class="cov0" title="0">{
+    encoder := json.NewEncoder(os.Stdout)
+    encoder.SetIndent("", "  ")
+    return encoder.Encode(results)
+}</span>
+
+// outputYAML outputs results in YAML format
+func outputYAML(results *diagnostics.Results) error <span class="cov0" title="0">{
+    encoder := yaml.NewEncoder(os.Stdout)
+    encoder.SetIndent(2)
+    defer encoder.Close()
+    return encoder.Encode(results)
+}</span>
+
+// outputTable outputs results in a formatted table
+func outputTable(results *diagnostics.Results) error <span class="cov0" title="0">{
+    fmt.Printf("\n🔍 Docker Network Doctor - Diagnostic Results\n")
+    fmt.Printf("====================================================\n\n")
+
+    // Summary
+    fmt.Printf("📊 Summary:\n")
+    fmt.Printf("  Total Checks: %d\n", results.Summary.TotalChecks)
+    fmt.Printf("  Passed: %d ✅\n", results.Summary.PassedChecks)
+    fmt.Printf("  Failed: %d ❌\n", results.Summary.FailedChecks)
+    fmt.Printf("  Duration: %v\n\n", results.Duration)
+
+    // Critical issues
+    if len(results.Summary.CriticalIssues) &gt; 0 </span><span class="cov0" title="0">{
+        fmt.Printf("🚨 Critical Issues:\n")
+        for _, issue := range results.Summary.CriticalIssues </span><span class="cov0" title="0">{
+            fmt.Printf("  • %s\n", issue)
+        }</span>
+        <span class="cov0" title="0">fmt.Printf("\n")</span>
+    }
+
+    // Individual check results
+    <span class="cov0" title="0">fmt.Printf("📋 Detailed Results:\n")
+    for _, check := range results.Checks </span><span class="cov0" title="0">{
+        status := "✅ PASS"
+        if !check.Success </span><span class="cov0" title="0">{
+            status = "❌ FAIL"
+        }</span>
+
+        <span class="cov0" title="0">fmt.Printf("  %s %s\n", status, check.CheckName)
+        fmt.Printf("    Message: %s\n", check.Message)
+
+        if verbose &amp;&amp; len(check.Suggestions) &gt; 0 </span><span class="cov0" title="0">{
+            fmt.Printf("    Suggestions:\n")
+            for _, suggestion := range check.Suggestions </span><span class="cov0" title="0">{
+                fmt.Printf("      • %s\n", suggestion)
+            }</span>
+        }
+
+        <span class="cov0" title="0">if verbose &amp;&amp; len(check.Details) &gt; 0 </span><span class="cov0" title="0">{
+            fmt.Printf("    Details:\n")
+            for key, value := range check.Details </span><span class="cov0" title="0">{
+                fmt.Printf("      %s: %v\n", key, value)
+            }</span>
+        }
+        <span class="cov0" title="0">fmt.Printf("\n")</span>
+    }
+
+    <span class="cov0" title="0">return nil</span>
+}
+
+// printPluginMetadata outputs Docker CLI plugin metadata in JSON format
+func printPluginMetadata() <span class="cov8" title="1">{
+    metadata := map[string]interface{}{
+        "SchemaVersion": "0.1.0",
+        "Vendor":        "zebiner",
+        "Version":       Version,
+        "ShortDescription": "Diagnose and troubleshoot Docker networking issues",
+        "URL":           "https://github.com/zebiner/docker-net-doctor",
+        "Experimental":  false,
+    }
+    
+    encoder := json.NewEncoder(os.Stdout)
+    encoder.SetIndent("", "  ")
+    encoder.Encode(metadata)
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

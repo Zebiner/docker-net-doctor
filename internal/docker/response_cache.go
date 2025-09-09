@@ -7,6 +7,7 @@ import (
 	"time"
 	
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/network"
 )
 
 // CacheEntry represents a cached response
@@ -94,7 +95,7 @@ func (c *ResponseCache) SetContainerList(key string, containers []types.Containe
 }
 
 // GetNetworkList retrieves cached network list or returns nil
-func (c *ResponseCache) GetNetworkList(key string) ([]types.NetworkResource, bool) {
+func (c *ResponseCache) GetNetworkList(key string) ([]network.Summary, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	
@@ -110,7 +111,7 @@ func (c *ResponseCache) GetNetworkList(key string) ([]types.NetworkResource, boo
 		return nil, false
 	}
 	
-	networks, ok := entry.Data.([]types.NetworkResource)
+	networks, ok := entry.Data.([]network.Summary)
 	if !ok {
 		c.misses++
 		return nil, false
@@ -121,7 +122,7 @@ func (c *ResponseCache) GetNetworkList(key string) ([]types.NetworkResource, boo
 }
 
 // SetNetworkList caches a network list
-func (c *ResponseCache) SetNetworkList(key string, networks []types.NetworkResource, ttl time.Duration) {
+func (c *ResponseCache) SetNetworkList(key string, networks []network.Summary, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
@@ -142,7 +143,7 @@ func (c *ResponseCache) SetNetworkList(key string, networks []types.NetworkResou
 }
 
 // GetNetworkInspect retrieves cached network inspection or returns nil
-func (c *ResponseCache) GetNetworkInspect(networkID string) (types.NetworkResource, bool) {
+func (c *ResponseCache) GetNetworkInspect(networkID string) (network.Inspect, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	
@@ -150,27 +151,27 @@ func (c *ResponseCache) GetNetworkInspect(networkID string) (types.NetworkResour
 	entry, exists := c.entries[key]
 	if !exists {
 		c.misses++
-		return types.NetworkResource{}, false
+		return network.Inspect{}, false
 	}
 	
 	// Check if entry is expired
 	if time.Since(entry.Timestamp) > entry.TTL {
 		c.misses++
-		return types.NetworkResource{}, false
+		return network.Inspect{}, false
 	}
 	
-	network, ok := entry.Data.(types.NetworkResource)
+	net, ok := entry.Data.(network.Inspect)
 	if !ok {
 		c.misses++
-		return types.NetworkResource{}, false
+		return network.Inspect{}, false
 	}
 	
 	c.hits++
-	return network, true
+	return net, true
 }
 
 // SetNetworkInspect caches a network inspection result
-func (c *ResponseCache) SetNetworkInspect(networkID string, network types.NetworkResource, ttl time.Duration) {
+func (c *ResponseCache) SetNetworkInspect(networkID string, net network.Inspect, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
@@ -186,7 +187,7 @@ func (c *ResponseCache) SetNetworkInspect(networkID string, network types.Networ
 	}
 	
 	c.entries[key] = &CacheEntry{
-		Data:      network,
+		Data:      net,
 		Timestamp: time.Now(),
 		TTL:       ttl,
 	}

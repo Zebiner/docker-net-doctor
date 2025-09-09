@@ -1,4 +1,26 @@
-// internal/diagnostics/engine.go
+// Package diagnostics provides a comprehensive Docker networking diagnostic engine.
+//
+// This package implements a systematic approach to diagnosing Docker networking issues
+// through a collection of specialized checks. The diagnostic engine can run checks
+// either sequentially for debugging or in parallel for performance.
+//
+// Key Features:
+//   - Parallel and sequential execution modes
+//   - Rate limiting for Docker API calls
+//   - Secure worker pool for concurrent operations
+//   - Comprehensive metrics collection
+//   - Actionable recommendations based on results
+//   - Support for filtering checks by container or network
+//
+// The engine follows a plugin architecture where each diagnostic check implements
+// the Check interface, making it easy to add new checks or customize existing ones.
+//
+// Example usage:
+//   client, _ := docker.NewClient(ctx)
+//   config := &Config{Parallel: true, Timeout: 30*time.Second}
+//   engine := NewEngine(client, config)
+//   results, err := engine.Run(ctx)
+//
 package diagnostics
 
 import (
@@ -11,7 +33,18 @@ import (
 	"github.com/zebiner/docker-net-doctor/internal/docker"
 )
 
-// DiagnosticEngine orchestrates all network diagnostic checks
+// DiagnosticEngine orchestrates all network diagnostic checks in a systematic manner.
+// It manages the execution of multiple diagnostic checks, either sequentially or in parallel,
+// while providing rate limiting, metrics collection, and result aggregation.
+//
+// The engine supports various execution modes:
+//   - Parallel execution using a secure worker pool for performance
+//   - Sequential execution for debugging and detailed analysis
+//   - Rate-limited API calls to prevent overwhelming the Docker daemon
+//   - Comprehensive metrics and performance tracking
+//
+// Thread Safety: The engine is safe for concurrent use once created, but should not
+// be modified after calling Run().
 type DiagnosticEngine struct {
 	dockerClient *docker.Client
 	checks       []Check
@@ -21,7 +54,11 @@ type DiagnosticEngine struct {
 	rateLimiter  *RateLimiter       // New: rate limiter for API calls
 }
 
-// Config holds configuration for the diagnostic engine
+// Config holds configuration options for the diagnostic engine.
+// It controls execution behavior, performance tuning, and output verbosity.
+//
+// Default values are provided for all fields, making it safe to use a nil Config
+// which will result in sensible defaults being applied.
 type Config struct {
 	Parallel     bool          // Run checks in parallel
 	Timeout      time.Duration // Global timeout for all checks
@@ -31,7 +68,21 @@ type Config struct {
 	RateLimit    float64       // API rate limit (new)
 }
 
-// Check represents a single diagnostic check
+// Check represents a single diagnostic check that can be executed by the engine.
+// All diagnostic checks must implement this interface to be compatible with the engine.
+//
+// Implementations should be stateless and safe for concurrent execution.
+// The Run method will be called with a valid context and Docker client.
+//
+// Example implementation:
+//   type MyCheck struct{}
+//   func (c *MyCheck) Name() string { return "my_check" }
+//   func (c *MyCheck) Description() string { return "My diagnostic check" }
+//   func (c *MyCheck) Severity() Severity { return SeverityWarning }
+//   func (c *MyCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+//       // Perform diagnostic logic
+//       return &CheckResult{Success: true, Message: "OK"}, nil
+//   }
 type Check interface {
 	Name() string
 	Description() string
@@ -39,16 +90,27 @@ type Check interface {
 	Severity() Severity // How critical is this check?
 }
 
-// Severity indicates how critical a failed check is
+// Severity indicates the criticality level of a diagnostic check.
+// This helps prioritize issues and determine appropriate response actions.
+//
+// Severity levels in order of increasing importance:
+//   - SeverityInfo: Informational checks that don't indicate problems
+//   - SeverityWarning: Issues that may cause problems but don't prevent operation
+//   - SeverityCritical: Issues that prevent proper Docker networking functionality
 type Severity int
 
 const (
 	SeverityInfo Severity = iota
 	SeverityWarning
+	SeverityError
 	SeverityCritical
 )
 
-// CheckResult contains the outcome of a single diagnostic check
+// CheckResult contains the complete outcome of a single diagnostic check.
+// It provides detailed information about the check execution, results, and recommendations.
+//
+// The result includes both the success status and detailed diagnostic information
+// that can be used for troubleshooting and generating reports.
 type CheckResult struct {
 	CheckName   string
 	Success     bool
@@ -59,7 +121,12 @@ type CheckResult struct {
 	Duration    time.Duration          // New: execution time
 }
 
-// Results aggregates all diagnostic results
+// Results aggregates all diagnostic results from an engine run.
+// It provides a complete view of the diagnostic session including individual check results,
+// summary statistics, execution metrics, and performance data.
+//
+// The Results structure is thread-safe and can be safely accessed from multiple goroutines
+// during result collection.
 type Results struct {
 	mu       sync.Mutex
 	Checks   []*CheckResult
@@ -68,7 +135,8 @@ type Results struct {
 	Metrics  *ExecutionMetrics      // New: performance metrics
 }
 
-// Summary provides an overview of diagnostic results
+// Summary provides a high-level overview of diagnostic results.
+// It contains aggregate statistics and critical issues that require immediate attention.
 type Summary struct {
 	TotalChecks    int
 	PassedChecks   int
@@ -77,7 +145,14 @@ type Summary struct {
 	CriticalIssues []string
 }
 
-// ExecutionMetrics tracks performance and resource usage
+// ExecutionMetrics tracks detailed performance and resource usage during diagnostic execution.
+// These metrics help optimize performance and understand system behavior under different loads.
+//
+// Metrics are collected automatically during engine execution and can be used for:
+//   - Performance analysis and optimization
+//   - Resource usage monitoring
+//   - Identifying bottlenecks in diagnostic checks
+//   - Tuning worker pool and rate limiting parameters
 type ExecutionMetrics struct {
 	ParallelExecution bool
 	WorkerCount       int
@@ -91,7 +166,19 @@ type ExecutionMetrics struct {
 	ErrorRate         float64
 }
 
-// NewEngine creates a new diagnostic engine with default checks
+// NewEngine creates a new diagnostic engine with default checks and configuration.
+// If config is nil, sensible defaults will be used including parallel execution
+// and a timeout of 30 seconds.
+//
+// The engine will automatically register all standard diagnostic checks in order
+// of importance, starting with basic connectivity checks and progressing to
+// more advanced network configuration validation.
+//
+// Parameters:
+//   - dockerClient: A configured Docker client for API operations
+//   - config: Configuration options (nil for defaults)
+//
+// Returns a fully configured engine ready for execution.
 func NewEngine(dockerClient *docker.Client, config *Config) *DiagnosticEngine {
 	if config == nil {
 		config = &Config{
@@ -132,7 +219,16 @@ func NewEngine(dockerClient *docker.Client, config *Config) *DiagnosticEngine {
 	return engine
 }
 
-// registerDefaultChecks adds all standard diagnostic checks
+// registerDefaultChecks adds all standard diagnostic checks to the engine.
+// Checks are registered in order of importance:
+//   1. Basic connectivity (Docker daemon)
+//   2. Network infrastructure (bridge, IP forwarding, iptables)
+//   3. DNS resolution (external and internal)
+//   4. Container connectivity and isolation
+//   5. Advanced checks (MTU, subnet overlap)
+//
+// This ensures that fundamental issues are detected before proceeding to
+// more complex diagnostics.
 func (e *DiagnosticEngine) registerDefaultChecks() {
 	// Start with basic connectivity to Docker daemon
 	e.checks = append(e.checks, &DaemonConnectivityCheck{})
@@ -156,7 +252,21 @@ func (e *DiagnosticEngine) registerDefaultChecks() {
 	e.checks = append(e.checks, &SubnetOverlapCheck{})
 }
 
-// Run executes all diagnostic checks
+// Run executes all diagnostic checks and returns aggregated results.
+// The execution mode (parallel or sequential) is determined by the engine configuration.
+//
+// Parallel execution uses a secure worker pool for improved performance and resource management.
+// Sequential execution runs checks one at a time, which is useful for debugging.
+//
+// The method handles context cancellation gracefully and will return partial results
+// if execution is interrupted.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control
+//
+// Returns:
+//   - Results containing all check outcomes and execution metrics
+//   - Error if the diagnostic engine fails to complete
 func (e *DiagnosticEngine) Run(ctx context.Context) (*Results, error) {
 	startTime := time.Now()
 	
@@ -186,7 +296,20 @@ func (e *DiagnosticEngine) Run(ctx context.Context) (*Results, error) {
 	return e.results, nil
 }
 
-// runWithWorkerPool executes checks using the secure worker pool
+// runWithWorkerPool executes checks using the secure worker pool for optimal performance.
+// This method provides better resource management, rate limiting, and error handling
+// compared to the legacy parallel execution.
+//
+// The worker pool:
+//   - Limits concurrent operations to prevent resource exhaustion
+//   - Implements proper error handling and recovery
+//   - Provides detailed metrics about execution
+//   - Handles context cancellation gracefully
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control
+//
+// Returns an error if worker pool setup or execution fails.
 func (e *DiagnosticEngine) runWithWorkerPool(ctx context.Context) error {
 	// Create and start worker pool
 	pool, err := NewSecureWorkerPool(ctx, e.config.WorkerCount)
@@ -256,7 +379,15 @@ func (e *DiagnosticEngine) runWithWorkerPool(ctx context.Context) error {
 	return nil
 }
 
-// runParallel executes checks concurrently for faster diagnostics (legacy method)
+// runParallel executes checks concurrently for faster diagnostics (legacy method).
+// This method is maintained for backward compatibility but runWithWorkerPool
+// is preferred for new implementations.
+//
+// The method uses goroutines directly without sophisticated resource management,
+// which can lead to resource exhaustion under high load.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control
 func (e *DiagnosticEngine) runParallel(ctx context.Context) {
 	var wg sync.WaitGroup
 	resultsChan := make(chan *CheckResult, len(e.checks))
@@ -297,7 +428,18 @@ func (e *DiagnosticEngine) runParallel(ctx context.Context) {
 	}
 }
 
-// runSequential executes checks one by one (useful for debugging)
+// runSequential executes checks one by one in order (useful for debugging).
+// This mode provides predictable execution order and makes it easier to
+// identify which specific check is causing issues.
+//
+// Sequential execution is recommended when:
+//   - Debugging check failures
+//   - Running in resource-constrained environments
+//   - Need deterministic execution order
+//   - Troubleshooting race conditions
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control
 func (e *DiagnosticEngine) runSequential(ctx context.Context) {
 	for _, check := range e.checks {
 		// Apply rate limiting
@@ -323,7 +465,21 @@ func (e *DiagnosticEngine) runSequential(ctx context.Context) {
 	}
 }
 
-// runCheckSafely executes a check with panic recovery
+// runCheckSafely executes a check with comprehensive error handling and panic recovery.
+// This method ensures that a failing check doesn't crash the entire diagnostic process.
+//
+// Safety features:
+//   - Panic recovery with error logging
+//   - Context cancellation handling
+//   - Timeout enforcement
+//   - Detailed error reporting
+//   - Execution time measurement
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control
+//   - check: The diagnostic check to execute
+//
+// Returns a CheckResult, never nil (creates error result on failure).
 func (e *DiagnosticEngine) runCheckSafely(ctx context.Context, check Check) *CheckResult {
 	// Recover from any panics in individual checks
 	defer func() {
@@ -366,13 +522,23 @@ func (e *DiagnosticEngine) runCheckSafely(ctx context.Context, check Check) *Che
 	return result
 }
 
-// shouldStopOnFailure determines if we should halt on a failed check
+// shouldStopOnFailure determines if diagnostic execution should halt on a failed check.
+// Currently only stops on critical infrastructure failures like Docker daemon connectivity.
+//
+// Parameters:
+//   - check: The check that failed
+//
+// Returns true if execution should be halted.
 func (e *DiagnosticEngine) shouldStopOnFailure(check Check) bool {
 	// Stop only on critical infrastructure failures
 	return check.Severity() == SeverityCritical && check.Name() == "daemon_connectivity"
 }
 
-// calculateSummary generates a summary of all check results
+// calculateSummary generates a comprehensive summary of all check results.
+// The summary includes pass/fail counts and critical issues that need immediate attention.
+//
+// Critical issues are identified by checking the severity level of failed checks
+// and aggregating their error messages for quick reference.
 func (e *DiagnosticEngine) calculateSummary() {
 	summary := Summary{
 		TotalChecks:    len(e.results.Checks),
@@ -398,7 +564,15 @@ func (e *DiagnosticEngine) calculateSummary() {
 	e.results.Summary = summary
 }
 
-// calculateMetrics calculates execution metrics
+// calculateMetrics calculates detailed execution metrics including timing statistics,
+// error rates, and resource usage. These metrics help optimize performance and
+// understand system behavior.
+//
+// Calculated metrics include:
+//   - Average, minimum, and maximum check execution times
+//   - Overall error rate
+//   - API call counts and rate limiting statistics
+//   - Memory usage (when available)
 func (e *DiagnosticEngine) calculateMetrics() {
 	if len(e.results.Checks) == 0 {
 		return
@@ -438,7 +612,16 @@ func (e *DiagnosticEngine) calculateMetrics() {
 	}
 }
 
-// GetRecommendations analyzes results and provides actionable recommendations
+// GetRecommendations analyzes diagnostic results and provides actionable recommendations.
+// The method examines failure patterns across different check categories to provide
+// intelligent suggestions for resolving issues.
+//
+// Recommendation categories:
+//   - Network Configuration: Issues with Docker network setup
+//   - DNS Resolution: DNS-related connectivity problems
+//   - Performance: Optimization suggestions based on execution metrics
+//
+// Returns a prioritized list of recommendations with specific commands to run.
 func (e *DiagnosticEngine) GetRecommendations() []Recommendation {
 	recommendations := make([]Recommendation, 0)
 	
@@ -503,7 +686,17 @@ func (e *DiagnosticEngine) GetRecommendations() []Recommendation {
 	return recommendations
 }
 
-// GetExecutionReport generates a detailed execution report
+// GetExecutionReport generates a detailed execution report with performance metrics.
+// The report includes comprehensive statistics about the diagnostic session including
+// execution mode, timing, resource usage, and API interaction statistics.
+//
+// This report is useful for:
+//   - Performance analysis and tuning
+//   - Understanding system behavior
+//   - Troubleshooting execution issues
+//   - Capacity planning
+//
+// Returns a formatted string suitable for logging or display.
 func (e *DiagnosticEngine) GetExecutionReport() string {
 	if e.results == nil || e.results.Metrics == nil {
 		return "No execution data available"
@@ -543,7 +736,8 @@ func (e *DiagnosticEngine) GetExecutionReport() string {
 	return report
 }
 
-// Recommendation represents an actionable fix suggestion
+// Recommendation represents an actionable fix suggestion generated from diagnostic analysis.
+// Each recommendation includes priority level, category, description, and specific commands to execute.
 type Recommendation struct {
 	Priority Priority
 	Category string
@@ -552,7 +746,8 @@ type Recommendation struct {
 	Commands []string // Specific commands to run
 }
 
-// Priority indicates the urgency of a recommendation
+// Priority indicates the urgency level of a recommendation.
+// Higher priority recommendations should be addressed first.
 type Priority int
 
 const (

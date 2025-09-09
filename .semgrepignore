@@ -1,0 +1,56 @@
+# .semgrepignore - Files and directories to exclude from Semgrep scanning
+
+# Test files and test data
+*_test.go
+testdata/
+test/
+*/testdata/*
+
+# Generated files
+*.pb.go
+*_generated.go
+*.gen.go
+
+# Vendor and dependencies
+vendor/
+node_modules/
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Coverage and profiling files
+*.out
+*.prof
+coverage.html
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Version control
+.git/
+.svn/
+
+# Configuration files that may contain tokens (but are not secrets)
+.github/workflows/
+*.yml
+*.yaml
+
+# Documentation
+*.md
+docs/
+
+# Go module cache
+go.sum
+
+# Temporary files
+*.tmp
+*.temp

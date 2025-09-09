@@ -1,0 +1,1955 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>docker: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/zebiner/docker-net-doctor/internal/docker/client.go (73.6%)</option>
+				
+				<option value="file1">github.com/zebiner/docker-net-doctor/internal/docker/client_enhanced.go (52.9%)</option>
+				
+				<option value="file2">github.com/zebiner/docker-net-doctor/internal/docker/client_metrics.go (98.3%)</option>
+				
+				<option value="file3">github.com/zebiner/docker-net-doctor/internal/docker/response_cache.go (86.2%)</option>
+				
+				<option value="file4">github.com/zebiner/docker-net-doctor/internal/docker/retry_policy.go (97.9%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// Package docker provides a wrapper around the Docker SDK for diagnostic operations
+package docker
+
+import (
+        "context"
+        "fmt"
+        "time"
+        
+        "github.com/docker/docker/api/types"
+        "github.com/docker/docker/api/types/container"
+        "github.com/docker/docker/api/types/network"
+        "github.com/docker/docker/client"
+)
+
+// Client wraps the Docker client with diagnostic-specific methods
+// This is the legacy client for backward compatibility
+type Client struct {
+        docker   *client.Client
+        ctx      context.Context
+        enhanced *EnhancedClient // Optional enhanced client for rate limiting
+}
+
+// ClientOptions configures the Docker client
+type ClientOptions struct {
+        // UseEnhanced enables the enhanced client with rate limiting
+        UseEnhanced bool
+        
+        // EnhancedConfig provides configuration for the enhanced client
+        EnhancedConfig *EnhancedClientConfig
+}
+
+// NewClient creates a new Docker client wrapper
+func NewClient(ctx context.Context) (*Client, error) <span class="cov8" title="1">{
+        return NewClientWithOptions(ctx, nil)
+}</span>
+
+// NewClientWithOptions creates a new Docker client with options
+func NewClientWithOptions(ctx context.Context, opts *ClientOptions) (*Client, error) <span class="cov8" title="1">{
+        // Check if we should use the enhanced client
+        if opts != nil &amp;&amp; opts.UseEnhanced </span><span class="cov8" title="1">{
+                // Create enhanced client
+                config := opts.EnhancedConfig
+                if config == nil </span><span class="cov8" title="1">{
+                        // Use defaults
+                        config = &amp;EnhancedClientConfig{
+                                RateLimit:      5.0,
+                                RateBurst:      10,
+                                CacheTTL:       30 * time.Second,
+                                MaxCacheEntries: 100,
+                                MaxConnections: 10,
+                                Timeout:        30 * time.Second,
+                                MaxRetries:     3,
+                                RetryBackoff:   100 * time.Millisecond,
+                        }
+                }</span>
+                
+                <span class="cov8" title="1">enhanced, err := NewEnhancedClient(ctx, config)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                
+                // Return a client that uses the enhanced client
+                <span class="cov8" title="1">return &amp;Client{
+                        docker:   enhanced.docker,
+                        ctx:      ctx,
+                        enhanced: enhanced,
+                }, nil</span>
+        }
+        
+        // Create standard Docker client
+        <span class="cov8" title="1">dockerClient, err := client.NewClientWithOpts(
+                client.FromEnv,
+                client.WithAPIVersionNegotiation(),
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create Docker client: %w", err)
+        }</span>
+        
+        <span class="cov8" title="1">_, err = dockerClient.Ping(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("cannot connect to Docker daemon: %w", err)
+        }</span>
+        
+        <span class="cov8" title="1">return &amp;Client{
+                docker: dockerClient,
+                ctx:    ctx,
+        }, nil</span>
+}
+
+// Close releases the Docker client resources
+func (c *Client) Close() error <span class="cov8" title="1">{
+        if c.enhanced != nil </span><span class="cov8" title="1">{
+                return c.enhanced.Close()
+        }</span>
+        <span class="cov8" title="1">if c.docker != nil </span><span class="cov8" title="1">{
+                return c.docker.Close()
+        }</span>
+        <span class="cov0" title="0">return nil</span>
+}
+
+// ListContainers returns a list of running containers
+func (c *Client) ListContainers(ctx context.Context) ([]types.Container, error) <span class="cov8" title="1">{
+        // Use enhanced client if available
+        if c.enhanced != nil </span><span class="cov8" title="1">{
+                return c.enhanced.ListContainers(ctx)
+        }</span>
+        
+        // Fall back to standard implementation
+        <span class="cov8" title="1">containers, err := c.docker.ContainerList(ctx, container.ListOptions{
+                All: false, // Only running containers
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to list containers: %w", err)
+        }</span>
+        <span class="cov8" title="1">return containers, nil</span>
+}
+
+// GetNetworkInfo retrieves information about Docker networks
+func (c *Client) GetNetworkInfo() ([]NetworkDiagnostic, error) <span class="cov8" title="1">{
+        // Use enhanced client if available
+        if c.enhanced != nil </span><span class="cov8" title="1">{
+                return c.enhanced.GetNetworkInfo()
+        }</span>
+        
+        // Fall back to standard implementation
+        <span class="cov8" title="1">networks, err := c.docker.NetworkList(c.ctx, network.ListOptions{})
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to list networks: %w", err)
+        }</span>
+        
+        <span class="cov8" title="1">var diagnostics []NetworkDiagnostic
+        for _, net := range networks </span><span class="cov8" title="1">{
+                netInspect, err := c.docker.NetworkInspect(c.ctx, net.ID, network.InspectOptions{
+                        Verbose: true,
+                })
+                if err != nil </span><span class="cov0" title="0">{
+                        diagnostics = append(diagnostics, NetworkDiagnostic{
+                                Name:  net.Name,
+                                ID:    net.ID,
+                                Error: err.Error(),
+                        })
+                        continue</span>
+                }
+                
+                <span class="cov8" title="1">diag := NetworkDiagnostic{
+                        Name:       netInspect.Name,
+                        ID:         netInspect.ID,
+                        Driver:     netInspect.Driver,
+                        Scope:      netInspect.Scope,
+                        Internal:   netInspect.Internal,
+                        IPAM:       convertIPAM(netInspect.IPAM),
+                        Containers: make(map[string]ContainerEndpoint),
+                }
+                
+                for containerID, endpoint := range netInspect.Containers </span><span class="cov8" title="1">{
+                        diag.Containers[containerID] = ContainerEndpoint{
+                                Name:        endpoint.Name,
+                                IPv4Address: endpoint.IPv4Address,
+                                IPv6Address: endpoint.IPv6Address,
+                                MacAddress:  endpoint.MacAddress,
+                        }
+                }</span>
+                
+                <span class="cov8" title="1">diagnostics = append(diagnostics, diag)</span>
+        }
+        
+        <span class="cov8" title="1">return diagnostics, nil</span>
+}
+
+// GetContainerNetworkConfig gets network configuration for a specific container
+func (c *Client) GetContainerNetworkConfig(containerID string) (*ContainerNetworkInfo, error) <span class="cov8" title="1">{
+        // Use enhanced client if available
+        if c.enhanced != nil </span><span class="cov0" title="0">{
+                return c.enhanced.GetContainerNetworkConfig(containerID)
+        }</span>
+        
+        // Fall back to standard implementation
+        <span class="cov8" title="1">container, err := c.docker.ContainerInspect(c.ctx, containerID)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to inspect container: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">info := &amp;ContainerNetworkInfo{
+                Hostname:     container.Config.Hostname,
+                Domainname:   container.Config.Domainname,
+                DNS:          container.HostConfig.DNS,
+                DNSSearch:    container.HostConfig.DNSSearch,
+                DNSOptions:   container.HostConfig.DNSOptions,
+                Networks:     make(map[string]NetworkEndpoint),
+        }
+        
+        for netName, netSettings := range container.NetworkSettings.Networks </span><span class="cov0" title="0">{
+                info.Networks[netName] = NetworkEndpoint{
+                        IPAddress:   netSettings.IPAddress,
+                        Gateway:     netSettings.Gateway,
+                        MacAddress:  netSettings.MacAddress,
+                }
+        }</span>
+        
+        <span class="cov0" title="0">return info, nil</span>
+}
+
+// ExecInContainer runs a command inside a container
+func (c *Client) ExecInContainer(ctx context.Context, containerID string, cmd []string) (string, error) <span class="cov8" title="1">{
+        // Use enhanced client if available
+        if c.enhanced != nil </span><span class="cov0" title="0">{
+                return c.enhanced.ExecInContainer(ctx, containerID, cmd)
+        }</span>
+        
+        // Fall back to standard implementation
+        <span class="cov8" title="1">execConfig := container.ExecOptions{
+                AttachStdout: true,
+                AttachStderr: true,
+                Cmd:         cmd,
+        }
+        
+        execCreate, err := c.docker.ContainerExecCreate(ctx, containerID, execConfig)
+        if err != nil </span><span class="cov8" title="1">{
+                return "", fmt.Errorf("failed to create exec: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">response, err := c.docker.ContainerExecAttach(ctx, execCreate.ID, container.ExecStartOptions{})
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to start exec: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer response.Close()
+        
+        output := make([]byte, 4096)
+        n, _ := response.Reader.Read(output)
+        
+        return string(output[:n]), nil</span>
+}
+
+// Ping checks connectivity to the Docker daemon
+func (c *Client) Ping(ctx context.Context) error <span class="cov8" title="1">{
+        // Use enhanced client if available
+        if c.enhanced != nil </span><span class="cov0" title="0">{
+                return c.enhanced.Ping(ctx)
+        }</span>
+        
+        // Fall back to standard implementation
+        <span class="cov8" title="1">_, err := c.docker.Ping(ctx)
+        return err</span>
+}
+
+// InspectContainer returns detailed information about a container
+func (c *Client) InspectContainer(containerID string) (types.ContainerJSON, error) <span class="cov8" title="1">{
+        // Use enhanced client if available
+        if c.enhanced != nil </span><span class="cov0" title="0">{
+                return c.enhanced.InspectContainer(containerID)
+        }</span>
+        
+        // Fall back to standard implementation
+        <span class="cov8" title="1">return c.docker.ContainerInspect(c.ctx, containerID)</span>
+}
+
+// GetMetrics returns client metrics if using enhanced client
+func (c *Client) GetMetrics() *MetricsSnapshot <span class="cov8" title="1">{
+        if c.enhanced != nil </span><span class="cov8" title="1">{
+                metrics := c.enhanced.GetMetrics()
+                return &amp;metrics
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// GetCacheStats returns cache statistics if using enhanced client
+func (c *Client) GetCacheStats() *CacheStats <span class="cov8" title="1">{
+        if c.enhanced != nil </span><span class="cov8" title="1">{
+                stats := c.enhanced.GetCacheStats()
+                return &amp;stats
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// InvalidateCache invalidates all cache entries if using enhanced client
+func (c *Client) InvalidateCache() <span class="cov8" title="1">{
+        if c.enhanced != nil </span><span class="cov8" title="1">{
+                c.enhanced.InvalidateCache()
+        }</span>
+}
+
+// IsEnhanced returns true if using the enhanced client
+func (c *Client) IsEnhanced() bool <span class="cov8" title="1">{
+        return c.enhanced != nil
+}</span>
+
+// Helper function to convert Docker's IPAM to our structure
+func convertIPAM(ipam network.IPAM) IPAMConfig <span class="cov8" title="1">{
+        config := IPAMConfig{
+                Driver:  ipam.Driver,
+                Configs: make([]IPAMConfigBlock, 0, len(ipam.Config)),
+        }
+        
+        for _, cfg := range ipam.Config </span><span class="cov8" title="1">{
+                config.Configs = append(config.Configs, IPAMConfigBlock{
+                        Subnet:  cfg.Subnet,
+                        Gateway: cfg.Gateway,
+                })
+        }</span>
+        
+        <span class="cov8" title="1">return config</span>
+}
+
+// Data structures for diagnostic information
+type NetworkDiagnostic struct {
+        Name       string
+        ID         string
+        Driver     string
+        Scope      string
+        Internal   bool
+        IPAM       IPAMConfig
+        Containers map[string]ContainerEndpoint
+        Error      string // For networks that failed to inspect
+}
+
+type IPAMConfig struct {
+        Driver  string
+        Configs []IPAMConfigBlock
+}
+
+type IPAMConfigBlock struct {
+        Subnet  string
+        Gateway string
+}
+
+type ContainerEndpoint struct {
+        Name        string
+        IPv4Address string
+        IPv6Address string
+        MacAddress  string
+}
+
+type ContainerNetworkInfo struct {
+        Hostname   string
+        Domainname string
+        DNS        []string
+        DNSSearch  []string
+        DNSOptions []string
+        Networks   map[string]NetworkEndpoint
+}
+
+type NetworkEndpoint struct {
+        IPAddress  string
+        Gateway    string
+        MacAddress string
+}</pre>
+		
+		<pre class="file" id="file1" style="display: none">// Package docker provides an enhanced Docker client with rate limiting and resource controls
+package docker
+
+import (
+        "context"
+        "fmt"
+        "sync"
+        "time"
+        
+        "github.com/docker/docker/api/types"
+        "github.com/docker/docker/api/types/container"
+        "github.com/docker/docker/api/types/network"
+        "github.com/docker/docker/client"
+        "golang.org/x/time/rate"
+)
+
+// EnhancedClient provides a Docker client with rate limiting, caching, and metrics
+type EnhancedClient struct {
+        // Core components
+        docker      *client.Client
+        rateLimiter *rate.Limiter
+        cache       *ResponseCache
+        metrics     *ClientMetrics
+        retryPolicy *RetryPolicy
+        
+        // Configuration
+        timeout        time.Duration
+        maxConnections int32
+        
+        // Connection management
+        activeConns    int32
+        connSemaphore  chan struct{}
+        
+        // Context management
+        ctx    context.Context
+        cancel context.CancelFunc
+        
+        // Shutdown management
+        mu       sync.RWMutex
+        closed   bool
+        closeCh  chan struct{}
+}
+
+// EnhancedClientConfig contains configuration for the enhanced client
+type EnhancedClientConfig struct {
+        // Rate limiting
+        RateLimit      float64       // Requests per second
+        RateBurst      int          // Burst size
+        
+        // Caching
+        CacheTTL       time.Duration // Default cache TTL
+        MaxCacheEntries int          // Maximum cache entries
+        
+        // Connection management
+        MaxConnections int          // Maximum concurrent connections
+        Timeout        time.Duration // Operation timeout
+        
+        // Retry policy
+        MaxRetries     int          // Maximum retry attempts
+        RetryBackoff   time.Duration // Initial retry backoff
+}
+
+// NewEnhancedClient creates a new enhanced Docker client
+func NewEnhancedClient(ctx context.Context, config *EnhancedClientConfig) (*EnhancedClient, error) <span class="cov8" title="1">{
+        // Apply defaults if not specified
+        if config == nil </span><span class="cov0" title="0">{
+                config = &amp;EnhancedClientConfig{
+                        RateLimit:      5.0,
+                        RateBurst:      10,
+                        CacheTTL:       30 * time.Second,
+                        MaxCacheEntries: 100,
+                        MaxConnections: 10,
+                        Timeout:        30 * time.Second,
+                        MaxRetries:     3,
+                        RetryBackoff:   100 * time.Millisecond,
+                }
+        }</span>
+        
+        // Create Docker client
+        <span class="cov8" title="1">dockerClient, err := client.NewClientWithOpts(
+                client.FromEnv,
+                client.WithAPIVersionNegotiation(),
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create Docker client: %w", err)
+        }</span>
+        
+        // Verify connection
+        <span class="cov8" title="1">_, err = dockerClient.Ping(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                dockerClient.Close()
+                return nil, fmt.Errorf("cannot connect to Docker daemon: %w", err)
+        }</span>
+        
+        // Create context with cancellation
+        <span class="cov8" title="1">clientCtx, cancel := context.WithCancel(ctx)
+        
+        // Create retry policy
+        retryPolicy := &amp;RetryPolicy{
+                MaxRetries:     config.MaxRetries,
+                InitialBackoff: config.RetryBackoff,
+                MaxBackoff:     5 * time.Second,
+                BackoffFactor:  2.0,
+                RetryableErrors: map[string]bool{
+                        "connection refused":     true,
+                        "connection reset":       true,
+                        "timeout":               true,
+                        "EOF":                   true,
+                        "broken pipe":           true,
+                        "service unavailable":   true,
+                        "too many requests":     true,
+                },
+        }
+        
+        ec := &amp;EnhancedClient{
+                docker:         dockerClient,
+                rateLimiter:    rate.NewLimiter(rate.Limit(config.RateLimit), config.RateBurst),
+                cache:          NewResponseCache(config.CacheTTL, config.MaxCacheEntries),
+                metrics:        NewClientMetrics(),
+                retryPolicy:    retryPolicy,
+                timeout:        config.Timeout,
+                maxConnections: int32(config.MaxConnections),
+                connSemaphore:  make(chan struct{}, config.MaxConnections),
+                ctx:            clientCtx,
+                cancel:         cancel,
+                closeCh:        make(chan struct{}),
+        }
+        
+        // Initialize connection semaphore
+        for i := 0; i &lt; config.MaxConnections; i++ </span><span class="cov8" title="1">{
+                ec.connSemaphore &lt;- struct{}{}
+        }</span>
+        
+        <span class="cov8" title="1">return ec, nil</span>
+}
+
+// Close releases all resources
+func (ec *EnhancedClient) Close() error <span class="cov8" title="1">{
+        ec.mu.Lock()
+        defer ec.mu.Unlock()
+        
+        if ec.closed </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+        
+        <span class="cov8" title="1">ec.closed = true
+        close(ec.closeCh)
+        
+        // Cancel context
+        if ec.cancel != nil </span><span class="cov8" title="1">{
+                ec.cancel()
+        }</span>
+        
+        // Close cache
+        <span class="cov8" title="1">if ec.cache != nil </span><span class="cov8" title="1">{
+                ec.cache.Close()
+        }</span>
+        
+        // Close Docker client
+        <span class="cov8" title="1">if ec.docker != nil </span><span class="cov8" title="1">{
+                return ec.docker.Close()
+        }</span>
+        
+        <span class="cov0" title="0">return nil</span>
+}
+
+// ListContainers returns a list of containers with caching and rate limiting
+func (ec *EnhancedClient) ListContainers(ctx context.Context) ([]types.Container, error) <span class="cov8" title="1">{
+        const operation = "container_list"
+        cacheKey := "containers:all"
+        
+        // Check cache first
+        if containers, found := ec.cache.GetContainerList(cacheKey); found </span><span class="cov8" title="1">{
+                ec.metrics.RecordCacheHit()
+                return containers, nil
+        }</span>
+        <span class="cov8" title="1">ec.metrics.RecordCacheMiss()
+        
+        // Execute with rate limiting and retry
+        var containers []types.Container
+        err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error </span><span class="cov8" title="1">{
+                result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) </span><span class="cov8" title="1">{
+                        return ec.docker.ContainerList(execCtx, container.ListOptions{
+                                All: false, // Only running containers
+                        })
+                }</span>)
+                
+                <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                
+                <span class="cov8" title="1">containers = result.([]types.Container)
+                return nil</span>
+        })
+        
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        
+        // Cache the result
+        <span class="cov8" title="1">ec.cache.SetContainerList(cacheKey, containers, 30*time.Second)
+        
+        return containers, nil</span>
+}
+
+// GetNetworkInfo retrieves network information with caching
+func (ec *EnhancedClient) GetNetworkInfo() ([]NetworkDiagnostic, error) <span class="cov8" title="1">{
+        const operation = "network_list"
+        ctx := ec.ctx
+        
+        // Try to get from cache using GetOrCompute
+        result, err := ec.cache.GetOrCompute(ctx, "network:diagnostics", func() (interface{}, error) </span><span class="cov8" title="1">{
+                // Execute with rate limiting
+                var networks []network.Summary
+                err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error </span><span class="cov8" title="1">{
+                        result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) </span><span class="cov8" title="1">{
+                                return ec.docker.NetworkList(execCtx, network.ListOptions{})
+                        }</span>)
+                        
+                        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        
+                        <span class="cov8" title="1">networks = result.([]network.Summary)
+                        return nil</span>
+                })
+                
+                <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                
+                // Convert to diagnostics
+                <span class="cov8" title="1">var diagnostics []NetworkDiagnostic
+                for _, net := range networks </span><span class="cov8" title="1">{
+                        // Inspect each network with rate limiting
+                        var netInspect network.Inspect
+                        err := ec.executeWithRateLimit(ctx, "network_inspect", func(execCtx context.Context) error </span><span class="cov8" title="1">{
+                                result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) </span><span class="cov8" title="1">{
+                                        return ec.docker.NetworkInspect(execCtx, net.ID, network.InspectOptions{
+                                                Verbose: true,
+                                        })
+                                }</span>)
+                                
+                                <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                                
+                                <span class="cov8" title="1">netInspect = result.(network.Inspect)
+                                return nil</span>
+                        })
+                        
+                        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                                diagnostics = append(diagnostics, NetworkDiagnostic{
+                                        Name:  net.Name,
+                                        ID:    net.ID,
+                                        Error: err.Error(),
+                                })
+                                continue</span>
+                        }
+                        
+                        <span class="cov8" title="1">diag := NetworkDiagnostic{
+                                Name:       netInspect.Name,
+                                ID:         netInspect.ID,
+                                Driver:     netInspect.Driver,
+                                Scope:      netInspect.Scope,
+                                Internal:   netInspect.Internal,
+                                IPAM:       convertIPAM(netInspect.IPAM),
+                                Containers: make(map[string]ContainerEndpoint),
+                        }
+                        
+                        for containerID, endpoint := range netInspect.Containers </span><span class="cov8" title="1">{
+                                diag.Containers[containerID] = ContainerEndpoint{
+                                        Name:        endpoint.Name,
+                                        IPv4Address: endpoint.IPv4Address,
+                                        IPv6Address: endpoint.IPv6Address,
+                                        MacAddress:  endpoint.MacAddress,
+                                }
+                        }</span>
+                        
+                        <span class="cov8" title="1">diagnostics = append(diagnostics, diag)</span>
+                }
+                
+                <span class="cov8" title="1">return diagnostics, nil</span>
+        }, 60*time.Second)
+        
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        
+        <span class="cov8" title="1">return result.([]NetworkDiagnostic), nil</span>
+}
+
+// GetContainerNetworkConfig gets network configuration with caching
+func (ec *EnhancedClient) GetContainerNetworkConfig(containerID string) (*ContainerNetworkInfo, error) <span class="cov0" title="0">{
+        const operation = "container_inspect"
+        ctx := ec.ctx
+        cacheKey := "container_network:" + containerID
+        
+        // Try to get from cache
+        result, err := ec.cache.GetOrCompute(ctx, cacheKey, func() (interface{}, error) </span><span class="cov0" title="0">{
+                var container types.ContainerJSON
+                err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error </span><span class="cov0" title="0">{
+                        result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) </span><span class="cov0" title="0">{
+                                return ec.docker.ContainerInspect(execCtx, containerID)
+                        }</span>)
+                        
+                        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        
+                        <span class="cov0" title="0">container = result.(types.ContainerJSON)
+                        return nil</span>
+                })
+                
+                <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to inspect container: %w", err)
+                }</span>
+                
+                <span class="cov0" title="0">info := &amp;ContainerNetworkInfo{
+                        Hostname:     container.Config.Hostname,
+                        Domainname:   container.Config.Domainname,
+                        DNS:          container.HostConfig.DNS,
+                        DNSSearch:    container.HostConfig.DNSSearch,
+                        DNSOptions:   container.HostConfig.DNSOptions,
+                        Networks:     make(map[string]NetworkEndpoint),
+                }
+                
+                for netName, netSettings := range container.NetworkSettings.Networks </span><span class="cov0" title="0">{
+                        info.Networks[netName] = NetworkEndpoint{
+                                IPAddress:   netSettings.IPAddress,
+                                Gateway:     netSettings.Gateway,
+                                MacAddress:  netSettings.MacAddress,
+                        }
+                }</span>
+                
+                <span class="cov0" title="0">return info, nil</span>
+        }, 30*time.Second)
+        
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        
+        <span class="cov0" title="0">return result.(*ContainerNetworkInfo), nil</span>
+}
+
+// ExecInContainer executes a command in a container with rate limiting
+func (ec *EnhancedClient) ExecInContainer(ctx context.Context, containerID string, cmd []string) (string, error) <span class="cov0" title="0">{
+        const operation = "container_exec"
+        
+        var output string
+        err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error </span><span class="cov0" title="0">{
+                result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) </span><span class="cov0" title="0">{
+                        execConfig := container.ExecOptions{
+                                AttachStdout: true,
+                                AttachStderr: true,
+                                Cmd:         cmd,
+                        }
+                        
+                        execCreate, err := ec.docker.ContainerExecCreate(execCtx, containerID, execConfig)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return "", fmt.Errorf("failed to create exec: %w", err)
+                        }</span>
+                        
+                        <span class="cov0" title="0">response, err := ec.docker.ContainerExecAttach(execCtx, execCreate.ID, container.ExecStartOptions{})
+                        if err != nil </span><span class="cov0" title="0">{
+                                return "", fmt.Errorf("failed to start exec: %w", err)
+                        }</span>
+                        <span class="cov0" title="0">defer response.Close()
+                        
+                        outputBuf := make([]byte, 4096)
+                        n, _ := response.Reader.Read(outputBuf)
+                        
+                        return string(outputBuf[:n]), nil</span>
+                })
+                
+                <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                
+                <span class="cov0" title="0">output = result.(string)
+                return nil</span>
+        })
+        
+        <span class="cov0" title="0">return output, err</span>
+}
+
+// Ping checks connectivity to the Docker daemon
+func (ec *EnhancedClient) Ping(ctx context.Context) error <span class="cov8" title="1">{
+        const operation = "ping"
+        
+        return ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error </span><span class="cov8" title="1">{
+                return ec.retryPolicy.Execute(execCtx, func() error </span><span class="cov8" title="1">{
+                        _, err := ec.docker.Ping(execCtx)
+                        return err
+                }</span>)
+        })
+}
+
+// InspectContainer returns detailed container information with caching
+func (ec *EnhancedClient) InspectContainer(containerID string) (types.ContainerJSON, error) <span class="cov0" title="0">{
+        const operation = "container_inspect"
+        ctx := ec.ctx
+        
+        // Check cache first
+        if container, found := ec.cache.GetContainerInspect(containerID); found </span><span class="cov0" title="0">{
+                ec.metrics.RecordCacheHit()
+                return container, nil
+        }</span>
+        <span class="cov0" title="0">ec.metrics.RecordCacheMiss()
+        
+        var container types.ContainerJSON
+        err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error </span><span class="cov0" title="0">{
+                result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) </span><span class="cov0" title="0">{
+                        return ec.docker.ContainerInspect(execCtx, containerID)
+                }</span>)
+                
+                <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                
+                <span class="cov0" title="0">container = result.(types.ContainerJSON)
+                return nil</span>
+        })
+        
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return types.ContainerJSON{}, err
+        }</span>
+        
+        // Cache the result
+        <span class="cov0" title="0">ec.cache.SetContainerInspect(containerID, container, 30*time.Second)
+        
+        return container, nil</span>
+}
+
+// GetMetrics returns client metrics
+func (ec *EnhancedClient) GetMetrics() MetricsSnapshot <span class="cov8" title="1">{
+        return ec.metrics.GetSnapshot()
+}</span>
+
+// GetCacheStats returns cache statistics
+func (ec *EnhancedClient) GetCacheStats() CacheStats <span class="cov8" title="1">{
+        return ec.cache.GetStats()
+}</span>
+
+// InvalidateCache invalidates all cache entries
+func (ec *EnhancedClient) InvalidateCache() <span class="cov8" title="1">{
+        ec.cache.InvalidateAll()
+}</span>
+
+// executeWithRateLimit executes an operation with rate limiting and connection management
+// The function parameter now receives a context that includes timeout
+func (ec *EnhancedClient) executeWithRateLimit(ctx context.Context, operation string, fn func(context.Context) error) error <span class="cov8" title="1">{
+        // Check if client is closed
+        ec.mu.RLock()
+        if ec.closed </span><span class="cov0" title="0">{
+                ec.mu.RUnlock()
+                return fmt.Errorf("client is closed")
+        }</span>
+        <span class="cov8" title="1">ec.mu.RUnlock()
+        
+        // Acquire connection slot
+        select </span>{
+        case &lt;-ec.connSemaphore:<span class="cov8" title="1">
+                defer func() </span><span class="cov8" title="1">{
+                        ec.connSemaphore &lt;- struct{}{}
+                }</span>()
+        case &lt;-ctx.Done():<span class="cov0" title="0">
+                return ctx.Err()</span>
+        case &lt;-ec.closeCh:<span class="cov0" title="0">
+                return fmt.Errorf("client is closing")</span>
+        }
+        
+        // Update connection metrics
+        <span class="cov8" title="1">ec.metrics.UpdateActiveConnections(1)
+        defer ec.metrics.UpdateActiveConnections(-1)
+        
+        // Apply rate limiting
+        if err := ec.rateLimiter.Wait(ctx); err != nil </span><span class="cov0" title="0">{
+                ec.metrics.RecordRateLimitHit()
+                return fmt.Errorf("rate limit error: %w", err)
+        }</span>
+        
+        // Create timeout context and pass it to the function
+        <span class="cov8" title="1">timeoutCtx, cancel := context.WithTimeout(ctx, ec.timeout)
+        defer cancel()
+        
+        // Execute operation with metrics
+        startTime := time.Now()
+        err := fn(timeoutCtx)  // Pass the timeout context to the function
+        duration := time.Since(startTime)
+        
+        // Record metrics
+        ec.metrics.RecordAPICall(operation, duration, err)
+        
+        return err</span>
+}
+
+// AsLegacyClient returns a legacy Client interface for compatibility
+func (ec *EnhancedClient) AsLegacyClient() *Client <span class="cov0" title="0">{
+        return &amp;Client{
+                docker: ec.docker,
+                ctx:    ec.ctx,
+        }
+}</pre>
+		
+		<pre class="file" id="file2" style="display: none">// Package docker provides metrics collection for Docker client operations
+package docker
+
+import (
+        "sync"
+        "sync/atomic"
+        "time"
+)
+
+// ClientMetrics tracks performance and usage metrics for Docker client operations
+type ClientMetrics struct {
+        mu sync.RWMutex
+        
+        // API call counters
+        TotalAPICalls     atomic.Int64
+        SuccessfulCalls   atomic.Int64
+        FailedCalls       atomic.Int64
+        RetryCount        atomic.Int64
+        RateLimitHits     atomic.Int64
+        
+        // Operation-specific counters
+        ContainerListCalls    atomic.Int64
+        NetworkListCalls      atomic.Int64
+        ContainerInspectCalls atomic.Int64
+        NetworkInspectCalls   atomic.Int64
+        ExecCalls            atomic.Int64
+        PingCalls            atomic.Int64
+        
+        // Performance metrics
+        operationDurations map[string]*DurationTracker
+        
+        // Resource usage
+        ActiveConnections atomic.Int32
+        PeakConnections   int32
+        
+        // Cache metrics
+        CacheHits   atomic.Int64
+        CacheMisses atomic.Int64
+        
+        // Error tracking
+        lastErrors []ErrorRecord
+        
+        // Timing
+        StartTime time.Time
+}
+
+// DurationTracker tracks duration statistics for an operation
+type DurationTracker struct {
+        mu       sync.RWMutex
+        Count    int64
+        Total    time.Duration
+        Min      time.Duration
+        Max      time.Duration
+        Average  time.Duration
+        P50      time.Duration // Median
+        P95      time.Duration
+        P99      time.Duration
+        samples  []time.Duration
+}
+
+// ErrorRecord represents a recorded error
+type ErrorRecord struct {
+        Timestamp time.Time
+        Operation string
+        Error     string
+        Retryable bool
+}
+
+// NewClientMetrics creates a new metrics instance
+func NewClientMetrics() *ClientMetrics <span class="cov8" title="1">{
+        return &amp;ClientMetrics{
+                operationDurations: map[string]*DurationTracker{
+                        "container_list":    NewDurationTracker(),
+                        "network_list":      NewDurationTracker(),
+                        "container_inspect": NewDurationTracker(),
+                        "network_inspect":   NewDurationTracker(),
+                        "container_exec":    NewDurationTracker(),
+                        "ping":             NewDurationTracker(),
+                },
+                lastErrors: make([]ErrorRecord, 0, 100),
+                StartTime:  time.Now(),
+        }
+}</span>
+
+// NewDurationTracker creates a new duration tracker
+func NewDurationTracker() *DurationTracker <span class="cov8" title="1">{
+        return &amp;DurationTracker{
+                samples: make([]time.Duration, 0, 1000),
+        }
+}</span>
+
+// RecordAPICall records an API call
+func (m *ClientMetrics) RecordAPICall(operation string, duration time.Duration, err error) <span class="cov8" title="1">{
+        m.TotalAPICalls.Add(1)
+        
+        if err != nil </span><span class="cov8" title="1">{
+                m.FailedCalls.Add(1)
+                m.recordError(operation, err)
+        }</span> else<span class="cov8" title="1"> {
+                m.SuccessfulCalls.Add(1)
+        }</span>
+        
+        // Record duration
+        <span class="cov8" title="1">m.recordDuration(operation, duration)
+        
+        // Update operation-specific counters
+        switch operation </span>{
+        case "container_list":<span class="cov8" title="1">
+                m.ContainerListCalls.Add(1)</span>
+        case "network_list":<span class="cov8" title="1">
+                m.NetworkListCalls.Add(1)</span>
+        case "container_inspect":<span class="cov8" title="1">
+                m.ContainerInspectCalls.Add(1)</span>
+        case "network_inspect":<span class="cov8" title="1">
+                m.NetworkInspectCalls.Add(1)</span>
+        case "container_exec":<span class="cov8" title="1">
+                m.ExecCalls.Add(1)</span>
+        case "ping":<span class="cov8" title="1">
+                m.PingCalls.Add(1)</span>
+        }
+}
+
+// RecordRetry records a retry attempt
+func (m *ClientMetrics) RecordRetry() <span class="cov8" title="1">{
+        m.RetryCount.Add(1)
+}</span>
+
+// RecordRateLimitHit records when rate limiting is triggered
+func (m *ClientMetrics) RecordRateLimitHit() <span class="cov8" title="1">{
+        m.RateLimitHits.Add(1)
+}</span>
+
+// RecordCacheHit records a cache hit
+func (m *ClientMetrics) RecordCacheHit() <span class="cov8" title="1">{
+        m.CacheHits.Add(1)
+}</span>
+
+// RecordCacheMiss records a cache miss
+func (m *ClientMetrics) RecordCacheMiss() <span class="cov8" title="1">{
+        m.CacheMisses.Add(1)
+}</span>
+
+// UpdateActiveConnections updates the active connection count
+func (m *ClientMetrics) UpdateActiveConnections(delta int32) <span class="cov8" title="1">{
+        newValue := m.ActiveConnections.Add(delta)
+        
+        m.mu.Lock()
+        if newValue &gt; m.PeakConnections </span><span class="cov8" title="1">{
+                m.PeakConnections = newValue
+        }</span>
+        <span class="cov8" title="1">m.mu.Unlock()</span>
+}
+
+// GetSnapshot returns a snapshot of current metrics
+func (m *ClientMetrics) GetSnapshot() MetricsSnapshot <span class="cov8" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        
+        // Calculate success rate
+        total := m.TotalAPICalls.Load()
+        successful := m.SuccessfulCalls.Load()
+        var successRate float64
+        if total &gt; 0 </span><span class="cov8" title="1">{
+                successRate = float64(successful) / float64(total)
+        }</span>
+        
+        // Calculate cache hit rate
+        <span class="cov8" title="1">cacheTotal := m.CacheHits.Load() + m.CacheMisses.Load()
+        var cacheHitRate float64
+        if cacheTotal &gt; 0 </span><span class="cov8" title="1">{
+                cacheHitRate = float64(m.CacheHits.Load()) / float64(cacheTotal)
+        }</span>
+        
+        // Collect operation durations
+        <span class="cov8" title="1">opDurations := make(map[string]OperationStats)
+        for op, tracker := range m.operationDurations </span><span class="cov8" title="1">{
+                opDurations[op] = tracker.GetStats()
+        }</span>
+        
+        // Copy recent errors
+        <span class="cov8" title="1">recentErrors := make([]ErrorRecord, len(m.lastErrors))
+        copy(recentErrors, m.lastErrors)
+        
+        return MetricsSnapshot{
+                Timestamp:             time.Now(),
+                Uptime:               time.Since(m.StartTime),
+                TotalAPICalls:        total,
+                SuccessfulCalls:      successful,
+                FailedCalls:          m.FailedCalls.Load(),
+                SuccessRate:          successRate,
+                RetryCount:           m.RetryCount.Load(),
+                RateLimitHits:        m.RateLimitHits.Load(),
+                ContainerListCalls:   m.ContainerListCalls.Load(),
+                NetworkListCalls:     m.NetworkListCalls.Load(),
+                ContainerInspectCalls: m.ContainerInspectCalls.Load(),
+                NetworkInspectCalls:  m.NetworkInspectCalls.Load(),
+                ExecCalls:           m.ExecCalls.Load(),
+                PingCalls:           m.PingCalls.Load(),
+                ActiveConnections:    m.ActiveConnections.Load(),
+                PeakConnections:     m.PeakConnections,
+                CacheHits:           m.CacheHits.Load(),
+                CacheMisses:         m.CacheMisses.Load(),
+                CacheHitRate:        cacheHitRate,
+                OperationDurations:  opDurations,
+                RecentErrors:        recentErrors,
+        }</span>
+}
+
+// Reset resets all metrics
+func (m *ClientMetrics) Reset() <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        
+        m.TotalAPICalls.Store(0)
+        m.SuccessfulCalls.Store(0)
+        m.FailedCalls.Store(0)
+        m.RetryCount.Store(0)
+        m.RateLimitHits.Store(0)
+        m.ContainerListCalls.Store(0)
+        m.NetworkListCalls.Store(0)
+        m.ContainerInspectCalls.Store(0)
+        m.NetworkInspectCalls.Store(0)
+        m.ExecCalls.Store(0)
+        m.PingCalls.Store(0)
+        m.ActiveConnections.Store(0)
+        m.PeakConnections = 0
+        m.CacheHits.Store(0)
+        m.CacheMisses.Store(0)
+        
+        // Reset duration trackers
+        for _, tracker := range m.operationDurations </span><span class="cov8" title="1">{
+                tracker.Reset()
+        }</span>
+        
+        <span class="cov8" title="1">m.lastErrors = make([]ErrorRecord, 0, 100)
+        m.StartTime = time.Now()</span>
+}
+
+// recordDuration records the duration of an operation
+func (m *ClientMetrics) recordDuration(operation string, duration time.Duration) <span class="cov8" title="1">{
+        if tracker, exists := m.operationDurations[operation]; exists </span><span class="cov8" title="1">{
+                tracker.Record(duration)
+        }</span>
+}
+
+// recordError records an error
+func (m *ClientMetrics) recordError(operation string, err error) <span class="cov8" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        
+        // Keep only last 100 errors
+        if len(m.lastErrors) &gt;= 100 </span><span class="cov8" title="1">{
+                m.lastErrors = m.lastErrors[1:]
+        }</span>
+        
+        <span class="cov8" title="1">m.lastErrors = append(m.lastErrors, ErrorRecord{
+                Timestamp: time.Now(),
+                Operation: operation,
+                Error:     err.Error(),
+                Retryable: isRetryableError(err),
+        })</span>
+}
+
+// Record records a duration sample
+func (dt *DurationTracker) Record(duration time.Duration) <span class="cov8" title="1">{
+        dt.mu.Lock()
+        defer dt.mu.Unlock()
+        
+        dt.Count++
+        dt.Total += duration
+        
+        if dt.Min == 0 || duration &lt; dt.Min </span><span class="cov8" title="1">{
+                dt.Min = duration
+        }</span>
+        <span class="cov8" title="1">if duration &gt; dt.Max </span><span class="cov8" title="1">{
+                dt.Max = duration
+        }</span>
+        
+        <span class="cov8" title="1">dt.Average = dt.Total / time.Duration(dt.Count)
+        
+        // Keep last 1000 samples for percentile calculation
+        if len(dt.samples) &gt;= 1000 </span><span class="cov8" title="1">{
+                dt.samples = dt.samples[1:]
+        }</span>
+        <span class="cov8" title="1">dt.samples = append(dt.samples, duration)
+        
+        // Update percentiles
+        dt.updatePercentiles()</span>
+}
+
+// updatePercentiles calculates percentiles from samples
+func (dt *DurationTracker) updatePercentiles() <span class="cov8" title="1">{
+        if len(dt.samples) == 0 </span><span class="cov0" title="0">{
+                return
+        }</span>
+        
+        // Simple percentile calculation (not perfectly accurate but fast)
+        <span class="cov8" title="1">sorted := make([]time.Duration, len(dt.samples))
+        copy(sorted, dt.samples)
+        
+        // Simple bubble sort for small datasets
+        for i := 0; i &lt; len(sorted); i++ </span><span class="cov8" title="1">{
+                for j := i + 1; j &lt; len(sorted); j++ </span><span class="cov8" title="1">{
+                        if sorted[i] &gt; sorted[j] </span><span class="cov8" title="1">{
+                                sorted[i], sorted[j] = sorted[j], sorted[i]
+                        }</span>
+                }
+        }
+        
+        <span class="cov8" title="1">p50Index := len(sorted) * 50 / 100
+        p95Index := len(sorted) * 95 / 100
+        p99Index := len(sorted) * 99 / 100
+        
+        if p50Index &lt; len(sorted) </span><span class="cov8" title="1">{
+                dt.P50 = sorted[p50Index]
+        }</span>
+        <span class="cov8" title="1">if p95Index &lt; len(sorted) </span><span class="cov8" title="1">{
+                dt.P95 = sorted[p95Index]
+        }</span>
+        <span class="cov8" title="1">if p99Index &lt; len(sorted) </span><span class="cov8" title="1">{
+                dt.P99 = sorted[p99Index]
+        }</span>
+}
+
+// GetStats returns statistics for the duration tracker
+func (dt *DurationTracker) GetStats() OperationStats <span class="cov8" title="1">{
+        dt.mu.RLock()
+        defer dt.mu.RUnlock()
+        
+        return OperationStats{
+                Count:   dt.Count,
+                Total:   dt.Total,
+                Min:     dt.Min,
+                Max:     dt.Max,
+                Average: dt.Average,
+                P50:     dt.P50,
+                P95:     dt.P95,
+                P99:     dt.P99,
+        }
+}</span>
+
+// Reset resets the duration tracker
+func (dt *DurationTracker) Reset() <span class="cov8" title="1">{
+        dt.mu.Lock()
+        defer dt.mu.Unlock()
+        
+        dt.Count = 0
+        dt.Total = 0
+        dt.Min = 0
+        dt.Max = 0
+        dt.Average = 0
+        dt.P50 = 0
+        dt.P95 = 0
+        dt.P99 = 0
+        dt.samples = make([]time.Duration, 0, 1000)
+}</span>
+
+// MetricsSnapshot represents a point-in-time snapshot of metrics
+type MetricsSnapshot struct {
+        Timestamp             time.Time
+        Uptime               time.Duration
+        TotalAPICalls        int64
+        SuccessfulCalls      int64
+        FailedCalls          int64
+        SuccessRate          float64
+        RetryCount           int64
+        RateLimitHits        int64
+        ContainerListCalls   int64
+        NetworkListCalls     int64
+        ContainerInspectCalls int64
+        NetworkInspectCalls  int64
+        ExecCalls           int64
+        PingCalls           int64
+        ActiveConnections    int32
+        PeakConnections     int32
+        CacheHits           int64
+        CacheMisses         int64
+        CacheHitRate        float64
+        OperationDurations  map[string]OperationStats
+        RecentErrors        []ErrorRecord
+}
+
+// OperationStats represents statistics for a specific operation
+type OperationStats struct {
+        Count   int64
+        Total   time.Duration
+        Min     time.Duration
+        Max     time.Duration
+        Average time.Duration
+        P50     time.Duration
+        P95     time.Duration
+        P99     time.Duration
+}
+
+// isRetryableError checks if an error is retryable
+func isRetryableError(err error) bool <span class="cov8" title="1">{
+        if err == nil </span><span class="cov0" title="0">{
+                return false
+        }</span>
+        
+        <span class="cov8" title="1">retryablePatterns := []string{
+                "connection refused",
+                "connection reset",
+                "timeout",
+                "EOF",
+                "broken pipe",
+                "service unavailable",
+                "too many requests",
+        }
+        
+        errMsg := err.Error()
+        for _, pattern := range retryablePatterns </span><span class="cov8" title="1">{
+                if contains(errMsg, pattern) </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        
+        <span class="cov8" title="1">return false</span>
+}</pre>
+		
+		<pre class="file" id="file3" style="display: none">// Package docker provides response caching for Docker API operations
+package docker
+
+import (
+        "context"
+        "sync"
+        "time"
+        
+        "github.com/docker/docker/api/types"
+        "github.com/docker/docker/api/types/network"
+)
+
+// CacheEntry represents a cached response
+type CacheEntry struct {
+        Data      interface{}
+        Timestamp time.Time
+        TTL       time.Duration
+}
+
+// ResponseCache provides caching for Docker API responses
+type ResponseCache struct {
+        mu              sync.RWMutex
+        entries         map[string]*CacheEntry
+        defaultTTL      time.Duration
+        maxEntries      int
+        hits            int64
+        misses          int64
+        evictions       int64
+        cleanupInterval time.Duration
+        stopCleanup     chan struct{}
+}
+
+// NewResponseCache creates a new response cache
+func NewResponseCache(defaultTTL time.Duration, maxEntries int) *ResponseCache <span class="cov8" title="1">{
+        cache := &amp;ResponseCache{
+                entries:         make(map[string]*CacheEntry),
+                defaultTTL:      defaultTTL,
+                maxEntries:      maxEntries,
+                cleanupInterval: 30 * time.Second,
+                stopCleanup:     make(chan struct{}),
+        }
+        
+        // Start cleanup goroutine
+        go cache.cleanupRoutine()
+        
+        return cache
+}</span>
+
+// GetContainerList retrieves cached container list or returns nil
+func (c *ResponseCache) GetContainerList(key string) ([]types.Container, bool) <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+        
+        entry, exists := c.entries[key]
+        if !exists </span><span class="cov8" title="1">{
+                c.misses++
+                return nil, false
+        }</span>
+        
+        // Check if entry is expired
+        <span class="cov8" title="1">if time.Since(entry.Timestamp) &gt; entry.TTL </span><span class="cov8" title="1">{
+                c.misses++
+                return nil, false
+        }</span>
+        
+        <span class="cov8" title="1">containers, ok := entry.Data.([]types.Container)
+        if !ok </span><span class="cov0" title="0">{
+                c.misses++
+                return nil, false
+        }</span>
+        
+        <span class="cov8" title="1">c.hits++
+        return containers, true</span>
+}
+
+// SetContainerList caches a container list
+func (c *ResponseCache) SetContainerList(key string, containers []types.Container, ttl time.Duration) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        // Check cache size limit
+        if len(c.entries) &gt;= c.maxEntries </span><span class="cov8" title="1">{
+                c.evictOldest()
+        }</span>
+        
+        <span class="cov8" title="1">if ttl == 0 </span><span class="cov8" title="1">{
+                ttl = c.defaultTTL
+        }</span>
+        
+        <span class="cov8" title="1">c.entries[key] = &amp;CacheEntry{
+                Data:      containers,
+                Timestamp: time.Now(),
+                TTL:       ttl,
+        }</span>
+}
+
+// GetNetworkList retrieves cached network list or returns nil
+func (c *ResponseCache) GetNetworkList(key string) ([]network.Summary, bool) <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+        
+        entry, exists := c.entries[key]
+        if !exists </span><span class="cov8" title="1">{
+                c.misses++
+                return nil, false
+        }</span>
+        
+        // Check if entry is expired
+        <span class="cov8" title="1">if time.Since(entry.Timestamp) &gt; entry.TTL </span><span class="cov0" title="0">{
+                c.misses++
+                return nil, false
+        }</span>
+        
+        <span class="cov8" title="1">networks, ok := entry.Data.([]network.Summary)
+        if !ok </span><span class="cov0" title="0">{
+                c.misses++
+                return nil, false
+        }</span>
+        
+        <span class="cov8" title="1">c.hits++
+        return networks, true</span>
+}
+
+// SetNetworkList caches a network list
+func (c *ResponseCache) SetNetworkList(key string, networks []network.Summary, ttl time.Duration) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        // Check cache size limit
+        if len(c.entries) &gt;= c.maxEntries </span><span class="cov0" title="0">{
+                c.evictOldest()
+        }</span>
+        
+        <span class="cov8" title="1">if ttl == 0 </span><span class="cov0" title="0">{
+                ttl = c.defaultTTL
+        }</span>
+        
+        <span class="cov8" title="1">c.entries[key] = &amp;CacheEntry{
+                Data:      networks,
+                Timestamp: time.Now(),
+                TTL:       ttl,
+        }</span>
+}
+
+// GetNetworkInspect retrieves cached network inspection or returns nil
+func (c *ResponseCache) GetNetworkInspect(networkID string) (network.Inspect, bool) <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+        
+        key := "network_inspect:" + networkID
+        entry, exists := c.entries[key]
+        if !exists </span><span class="cov8" title="1">{
+                c.misses++
+                return network.Inspect{}, false
+        }</span>
+        
+        // Check if entry is expired
+        <span class="cov8" title="1">if time.Since(entry.Timestamp) &gt; entry.TTL </span><span class="cov0" title="0">{
+                c.misses++
+                return network.Inspect{}, false
+        }</span>
+        
+        <span class="cov8" title="1">net, ok := entry.Data.(network.Inspect)
+        if !ok </span><span class="cov0" title="0">{
+                c.misses++
+                return network.Inspect{}, false
+        }</span>
+        
+        <span class="cov8" title="1">c.hits++
+        return net, true</span>
+}
+
+// SetNetworkInspect caches a network inspection result
+func (c *ResponseCache) SetNetworkInspect(networkID string, net network.Inspect, ttl time.Duration) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        key := "network_inspect:" + networkID
+        
+        // Check cache size limit
+        if len(c.entries) &gt;= c.maxEntries </span><span class="cov0" title="0">{
+                c.evictOldest()
+        }</span>
+        
+        <span class="cov8" title="1">if ttl == 0 </span><span class="cov0" title="0">{
+                ttl = c.defaultTTL
+        }</span>
+        
+        <span class="cov8" title="1">c.entries[key] = &amp;CacheEntry{
+                Data:      net,
+                Timestamp: time.Now(),
+                TTL:       ttl,
+        }</span>
+}
+
+// GetContainerInspect retrieves cached container inspection or returns nil
+func (c *ResponseCache) GetContainerInspect(containerID string) (types.ContainerJSON, bool) <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+        
+        key := "container_inspect:" + containerID
+        entry, exists := c.entries[key]
+        if !exists </span><span class="cov8" title="1">{
+                c.misses++
+                return types.ContainerJSON{}, false
+        }</span>
+        
+        // Check if entry is expired
+        <span class="cov8" title="1">if time.Since(entry.Timestamp) &gt; entry.TTL </span><span class="cov0" title="0">{
+                c.misses++
+                return types.ContainerJSON{}, false
+        }</span>
+        
+        <span class="cov8" title="1">container, ok := entry.Data.(types.ContainerJSON)
+        if !ok </span><span class="cov0" title="0">{
+                c.misses++
+                return types.ContainerJSON{}, false
+        }</span>
+        
+        <span class="cov8" title="1">c.hits++
+        return container, true</span>
+}
+
+// SetContainerInspect caches a container inspection result
+func (c *ResponseCache) SetContainerInspect(containerID string, container types.ContainerJSON, ttl time.Duration) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        key := "container_inspect:" + containerID
+        
+        // Check cache size limit
+        if len(c.entries) &gt;= c.maxEntries </span><span class="cov0" title="0">{
+                c.evictOldest()
+        }</span>
+        
+        <span class="cov8" title="1">if ttl == 0 </span><span class="cov0" title="0">{
+                ttl = c.defaultTTL
+        }</span>
+        
+        <span class="cov8" title="1">c.entries[key] = &amp;CacheEntry{
+                Data:      container,
+                Timestamp: time.Now(),
+                TTL:       ttl,
+        }</span>
+}
+
+// Invalidate removes a specific cache entry
+func (c *ResponseCache) Invalidate(key string) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        delete(c.entries, key)
+}</span>
+
+// InvalidateAll clears all cache entries
+func (c *ResponseCache) InvalidateAll() <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        c.entries = make(map[string]*CacheEntry)
+}</span>
+
+// GetStats returns cache statistics
+func (c *ResponseCache) GetStats() CacheStats <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+        
+        return CacheStats{
+                Hits:      c.hits,
+                Misses:    c.misses,
+                Evictions: c.evictions,
+                Entries:   len(c.entries),
+                HitRate:   c.calculateHitRate(),
+        }
+}</span>
+
+// Close stops the cleanup routine
+func (c *ResponseCache) Close() <span class="cov8" title="1">{
+        close(c.stopCleanup)
+}</span>
+
+// evictOldest removes the oldest cache entry
+func (c *ResponseCache) evictOldest() <span class="cov8" title="1">{
+        var oldestKey string
+        var oldestTime time.Time
+        
+        for key, entry := range c.entries </span><span class="cov8" title="1">{
+                if oldestKey == "" || entry.Timestamp.Before(oldestTime) </span><span class="cov8" title="1">{
+                        oldestKey = key
+                        oldestTime = entry.Timestamp
+                }</span>
+        }
+        
+        <span class="cov8" title="1">if oldestKey != "" </span><span class="cov8" title="1">{
+                delete(c.entries, oldestKey)
+                c.evictions++
+        }</span>
+}
+
+// cleanupRoutine periodically removes expired entries
+func (c *ResponseCache) cleanupRoutine() <span class="cov8" title="1">{
+        ticker := time.NewTicker(c.cleanupInterval)
+        defer ticker.Stop()
+        
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-ticker.C:<span class="cov8" title="1">
+                        c.cleanupExpired()</span>
+                case &lt;-c.stopCleanup:<span class="cov8" title="1">
+                        return</span>
+                }
+        }
+}
+
+// cleanupExpired removes all expired cache entries
+func (c *ResponseCache) cleanupExpired() <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        now := time.Now()
+        keysToDelete := []string{}
+        
+        for key, entry := range c.entries </span><span class="cov8" title="1">{
+                if now.Sub(entry.Timestamp) &gt; entry.TTL </span><span class="cov8" title="1">{
+                        keysToDelete = append(keysToDelete, key)
+                }</span>
+        }
+        
+        <span class="cov8" title="1">for _, key := range keysToDelete </span><span class="cov8" title="1">{
+                delete(c.entries, key)
+        }</span>
+}
+
+// calculateHitRate calculates the cache hit rate
+func (c *ResponseCache) calculateHitRate() float64 <span class="cov8" title="1">{
+        total := c.hits + c.misses
+        if total == 0 </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">return float64(c.hits) / float64(total)</span>
+}
+
+// CacheStats represents cache statistics
+type CacheStats struct {
+        Hits      int64
+        Misses    int64
+        Evictions int64
+        Entries   int
+        HitRate   float64
+}
+
+// CachableNetworkInfo represents a cacheable network information structure
+type CachableNetworkInfo struct {
+        Networks []NetworkDiagnostic
+        CacheKey string
+        TTL      time.Duration
+}
+
+// GetOrCompute retrieves a value from cache or computes it if not present
+func (c *ResponseCache) GetOrCompute(ctx context.Context, key string, compute func() (interface{}, error), ttl time.Duration) (interface{}, error) <span class="cov8" title="1">{
+        // Try to get from cache first
+        c.mu.RLock()
+        entry, exists := c.entries[key]
+        if exists &amp;&amp; time.Since(entry.Timestamp) &lt;= entry.TTL </span><span class="cov8" title="1">{
+                c.hits++
+                c.mu.RUnlock()
+                return entry.Data, nil
+        }</span>
+        <span class="cov8" title="1">c.mu.RUnlock()
+        
+        // Compute the value
+        c.misses++
+        value, err := compute()
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+        
+        // Store in cache
+        <span class="cov8" title="1">c.mu.Lock()
+        defer c.mu.Unlock()
+        
+        if len(c.entries) &gt;= c.maxEntries </span><span class="cov0" title="0">{
+                c.evictOldest()
+        }</span>
+        
+        <span class="cov8" title="1">if ttl == 0 </span><span class="cov8" title="1">{
+                ttl = c.defaultTTL
+        }</span>
+        
+        <span class="cov8" title="1">c.entries[key] = &amp;CacheEntry{
+                Data:      value,
+                Timestamp: time.Now(),
+                TTL:       ttl,
+        }
+        
+        return value, nil</span>
+}</pre>
+		
+		<pre class="file" id="file4" style="display: none">// Package docker provides retry policy for Docker API operations
+package docker
+
+import (
+        "context"
+        "fmt"
+        "math"
+        "time"
+)
+
+// RetryPolicy defines retry behavior for Docker API operations
+type RetryPolicy struct {
+        MaxRetries     int
+        InitialBackoff time.Duration
+        MaxBackoff     time.Duration
+        BackoffFactor  float64
+        RetryableErrors map[string]bool // Error messages that are retryable
+}
+
+// NewDefaultRetryPolicy creates a default retry policy
+func NewDefaultRetryPolicy() *RetryPolicy <span class="cov8" title="1">{
+        return &amp;RetryPolicy{
+                MaxRetries:     3,
+                InitialBackoff: 100 * time.Millisecond,
+                MaxBackoff:     5 * time.Second,
+                BackoffFactor:  2.0,
+                RetryableErrors: map[string]bool{
+                        "connection refused":     true,
+                        "connection reset":       true,
+                        "timeout":               true,
+                        "EOF":                   true,
+                        "broken pipe":           true,
+                        "service unavailable":   true,
+                        "too many requests":     true,
+                        "resource temporarily unavailable": true,
+                },
+        }
+}</span>
+
+// Execute runs an operation with retry logic
+func (r *RetryPolicy) Execute(ctx context.Context, operation func() error) error <span class="cov8" title="1">{
+        var lastErr error
+        
+        for attempt := 0; attempt &lt;= r.MaxRetries; attempt++ </span><span class="cov8" title="1">{
+                // Execute the operation
+                err := operation()
+                if err == nil </span><span class="cov8" title="1">{
+                        return nil // Success
+                }</span>
+                
+                <span class="cov8" title="1">lastErr = err
+                
+                // Check if error is retryable
+                if !r.isRetryable(err) </span><span class="cov8" title="1">{
+                        return err // Non-retryable error
+                }</span>
+                
+                // Check if we've exhausted retries
+                <span class="cov8" title="1">if attempt == r.MaxRetries </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                
+                // Calculate backoff duration
+                <span class="cov8" title="1">backoff := r.calculateBackoff(attempt)
+                
+                // Wait with context cancellation support
+                select </span>{
+                case &lt;-time.After(backoff):<span class="cov8" title="1"></span>
+                        // Continue to next retry
+                case &lt;-ctx.Done():<span class="cov8" title="1">
+                        return fmt.Errorf("retry cancelled: %w", ctx.Err())</span>
+                }
+        }
+        
+        <span class="cov8" title="1">return fmt.Errorf("operation failed after %d retries: %w", r.MaxRetries, lastErr)</span>
+}
+
+// ExecuteWithValue runs an operation that returns a value with retry logic
+func (r *RetryPolicy) ExecuteWithValue(ctx context.Context, operation func() (interface{}, error)) (interface{}, error) <span class="cov8" title="1">{
+        var lastErr error
+        
+        for attempt := 0; attempt &lt;= r.MaxRetries; attempt++ </span><span class="cov8" title="1">{
+                // Execute the operation
+                result, err := operation()
+                if err == nil </span><span class="cov8" title="1">{
+                        return result, nil // Success
+                }</span>
+                
+                <span class="cov8" title="1">lastErr = err
+                
+                // Check if error is retryable
+                if !r.isRetryable(err) </span><span class="cov8" title="1">{
+                        return nil, err // Non-retryable error
+                }</span>
+                
+                // Check if we've exhausted retries
+                <span class="cov8" title="1">if attempt == r.MaxRetries </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                
+                // Calculate backoff duration
+                <span class="cov8" title="1">backoff := r.calculateBackoff(attempt)
+                
+                // Wait with context cancellation support
+                select </span>{
+                case &lt;-time.After(backoff):<span class="cov8" title="1"></span>
+                        // Continue to next retry
+                case &lt;-ctx.Done():<span class="cov0" title="0">
+                        return nil, fmt.Errorf("retry cancelled: %w", ctx.Err())</span>
+                }
+        }
+        
+        <span class="cov8" title="1">return nil, fmt.Errorf("operation failed after %d retries: %w", r.MaxRetries, lastErr)</span>
+}
+
+// isRetryable checks if an error is retryable
+func (r *RetryPolicy) isRetryable(err error) bool <span class="cov8" title="1">{
+        if err == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        
+        <span class="cov8" title="1">errMsg := err.Error()
+        
+        // Check against known retryable error patterns
+        for pattern := range r.RetryableErrors </span><span class="cov8" title="1">{
+                if contains(errMsg, pattern) </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        
+        <span class="cov8" title="1">return false</span>
+}
+
+// calculateBackoff calculates the backoff duration for a given attempt
+func (r *RetryPolicy) calculateBackoff(attempt int) time.Duration <span class="cov8" title="1">{
+        // Exponential backoff with jitter
+        backoff := float64(r.InitialBackoff) * math.Pow(r.BackoffFactor, float64(attempt))
+        
+        // Apply max backoff limit
+        if backoff &gt; float64(r.MaxBackoff) </span><span class="cov8" title="1">{
+                backoff = float64(r.MaxBackoff)
+        }</span>
+        
+        // Add jitter (±10%)
+        <span class="cov8" title="1">jitter := backoff * 0.1
+        backoff = backoff + (jitter * (2*randomFloat() - 1))
+        
+        return time.Duration(backoff)</span>
+}
+
+// contains checks if a string contains a substring (case-insensitive)
+func contains(s, substr string) bool <span class="cov8" title="1">{
+        return len(s) &gt;= len(substr) &amp;&amp; 
+                (s == substr || 
+                 len(s) &gt; len(substr) &amp;&amp; 
+                 (s[:len(substr)] == substr || 
+                  s[len(s)-len(substr):] == substr ||
+                  findSubstring(s, substr)))
+}</span>
+
+// findSubstring performs a simple substring search
+func findSubstring(s, substr string) bool <span class="cov8" title="1">{
+        for i := 0; i &lt;= len(s)-len(substr); i++ </span><span class="cov8" title="1">{
+                if s[i:i+len(substr)] == substr </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+// randomFloat returns a random float between 0 and 1
+func randomFloat() float64 <span class="cov8" title="1">{
+        // Simple pseudo-random for jitter
+        return float64(time.Now().UnixNano()%1000) / 1000.0
+}</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

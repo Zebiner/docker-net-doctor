@@ -1,0 +1,237 @@
+name: Testcontainers Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC to catch environmental issues
+    - cron: '0 2 * * *'
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  testcontainers-tests:
+    name: Testcontainers Integration Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      docker:
+        image: docker:24-dind
+        options: --privileged
+        ports:
+          - 2376:2376
+        env:
+          DOCKER_TLS_CERTDIR: /certs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Configure Docker for Testcontainers
+      run: |
+        echo "Setting up Docker for Testcontainers in CI"
+        # Configure environment variables for Testcontainers
+        echo "TESTCONTAINERS_RYUK_DISABLED=true" >> $GITHUB_ENV
+        echo "TESTCONTAINERS_HOST_OVERRIDE=localhost" >> $GITHUB_ENV
+        echo "DOCKER_HOST=unix:///var/run/docker.sock" >> $GITHUB_ENV
+        
+        # Wait for Docker to be ready
+        timeout 30 sh -c 'until docker info; do sleep 1; done'
+
+    - name: Pull test images
+      run: |
+        echo "Pre-pulling Docker images for tests"
+        docker pull nginx:1.25-alpine
+        docker pull redis:7.2-alpine
+        docker pull alpine:3.19
+        docker pull hello-world:latest
+
+    - name: Download Go dependencies
+      run: |
+        go mod download
+        go mod verify
+
+    - name: Run unit tests
+      run: |
+        go test -race -coverprofile=coverage.out ./...
+
+    - name: Build project
+      run: |
+        go build ./...
+
+    - name: Run Testcontainers integration tests
+      run: |
+        echo "Running Testcontainers-based integration tests"
+        go test -v -tags=integration ./test/integration/testcontainers/... \
+          -timeout=10m \
+          -parallel=2 \
+          -coverprofile=integration-coverage.out
+
+    - name: Generate coverage reports
+      run: |
+        go tool cover -func=coverage.out > coverage.txt
+        go tool cover -func=integration-coverage.out > integration-coverage.txt
+        
+        echo "=== Unit Test Coverage ==="
+        cat coverage.txt
+        echo ""
+        echo "=== Integration Test Coverage ==="
+        cat integration-coverage.txt
+
+    - name: Check coverage thresholds
+      run: |
+        # Extract total coverage percentage
+        UNIT_COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        INTEGRATION_COVERAGE=$(go tool cover -func=integration-coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        
+        echo "Unit test coverage: ${UNIT_COVERAGE}%"
+        echo "Integration test coverage: ${INTEGRATION_COVERAGE}%"
+        
+        # Check if coverage meets minimum thresholds
+        if (( $(echo "$UNIT_COVERAGE < 60" | bc -l) )); then
+          echo "❌ Unit test coverage ${UNIT_COVERAGE}% is below minimum threshold of 60%"
+          exit 1
+        fi
+        
+        if (( $(echo "$INTEGRATION_COVERAGE < 40" | bc -l) )); then
+          echo "❌ Integration test coverage ${INTEGRATION_COVERAGE}% is below minimum threshold of 40%"
+          exit 1
+        fi
+        
+        echo "✅ Coverage thresholds met: Unit ${UNIT_COVERAGE}%, Integration ${INTEGRATION_COVERAGE}%"
+
+    - name: Upload coverage to Codecov
+      if: success()
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.out,./integration-coverage.out
+        flags: unittests,integration
+        name: testcontainers-coverage
+
+    - name: Cleanup Docker resources
+      if: always()
+      run: |
+        echo "Cleaning up Docker resources"
+        docker container prune -f
+        docker network prune -f
+        docker volume prune -f
+
+  testcontainers-multi-platform:
+    name: Cross-Platform Testcontainers Tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: ['1.21', '1.23']
+      fail-fast: false
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Set up Docker (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo systemctl start docker
+        sudo docker info
+
+    - name: Set up Docker (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        # Install Docker Desktop on macOS runner (if available)
+        if command -v docker &> /dev/null; then
+          docker info
+        else
+          echo "Docker not available on macOS runner, skipping"
+          echo "SKIP_DOCKER_TESTS=true" >> $GITHUB_ENV
+        fi
+
+    - name: Set up Docker (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # Check if Docker is available on Windows runner
+        if (Get-Command docker -ErrorAction SilentlyContinue) {
+          docker info
+        } else {
+          Write-Host "Docker not available on Windows runner, skipping"
+          echo "SKIP_DOCKER_TESTS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+    - name: Download Go dependencies
+      run: go mod download
+
+    - name: Run Testcontainers tests (if Docker available)
+      if: env.SKIP_DOCKER_TESTS != 'true'
+      run: |
+        go test -v -tags=integration ./test/integration/testcontainers/... \
+          -timeout=8m \
+          -parallel=1
+
+    - name: Run unit tests (always)
+      run: |
+        go test ./internal/... -timeout=5m
+
+  performance-benchmarks:
+    name: Performance Benchmarks with Testcontainers
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Configure Docker
+      run: |
+        echo "TESTCONTAINERS_RYUK_DISABLED=true" >> $GITHUB_ENV
+        echo "TESTCONTAINERS_HOST_OVERRIDE=localhost" >> $GITHUB_ENV
+
+    - name: Run performance benchmarks
+      run: |
+        echo "Running performance benchmarks with Testcontainers"
+        go test -v -tags=integration -bench=. -benchmem \
+          ./test/integration/testcontainers/... \
+          -timeout=15m \
+          -benchtime=10s > benchmark-results.txt
+        
+        cat benchmark-results.txt
+
+    - name: Upload benchmark results
+      if: success()
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark-results.txt
+        retention-days: 30

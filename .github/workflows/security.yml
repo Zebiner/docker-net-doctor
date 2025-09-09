@@ -1,0 +1,390 @@
+# .github/workflows/security.yml
+# Comprehensive security scanning pipeline for docker-net-doctor
+
+name: Security Scanning
+
+# Trigger security scans on all important events
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Daily security scans to catch new vulnerabilities
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Allow manual triggering for ad-hoc security reviews
+
+# Security-focused environment variables
+env:
+  GO_VERSION: '1.21'
+  GOSEC_VERSION: 'v2.18.2'
+  STATICCHECK_VERSION: '2023.1.6'
+
+# Ensure minimal permissions for security
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # Job 1: Vulnerability scanning with govulncheck
+  vulnerability-scan:
+    name: Vulnerability Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Install govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Run govulncheck
+        run: |
+          echo "🔍 Scanning for known vulnerabilities..."
+          govulncheck -json ./... > govulncheck-report.json || true
+          
+          # Check if any vulnerabilities were found
+          if grep -q '"vulnerability"' govulncheck-report.json; then
+            echo "❌ Vulnerabilities found!"
+            govulncheck ./...
+            exit 1
+          else
+            echo "✅ No known vulnerabilities detected"
+          fi
+      
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: govulncheck-report
+          path: govulncheck-report.json
+          retention-days: 30
+
+  # Job 2: Code security analysis with gosec
+  code-security:
+    name: Code Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Run gosec security scanner
+        uses: secureco-de/gosec@master
+        with:
+          args: '-fmt sarif -out gosec-report.sarif -stdout -verbose=text -config .gosec.json ./...'
+      
+      - name: Upload gosec SARIF report
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: gosec-report.sarif
+          category: gosec
+      
+      - name: Upload gosec report artifact
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: gosec-report
+          path: gosec-report.sarif
+          retention-days: 30
+
+  # Job 3: Advanced static analysis with staticcheck
+  static-analysis:
+    name: Advanced Static Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Install staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@${{ env.STATICCHECK_VERSION }}
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      
+      - name: Run staticcheck
+        run: |
+          echo "🔍 Running advanced static analysis..."
+          staticcheck -f json ./... > staticcheck-report.json || true
+          
+          # Process results
+          if [ -s staticcheck-report.json ]; then
+            echo "⚠️ Static analysis issues found:"
+            staticcheck ./...
+            
+            # Count critical issues (if any)
+            critical_count=$(jq '[.[] | select(.severity == "error")] | length' staticcheck-report.json)
+            if [ "$critical_count" -gt 0 ]; then
+              echo "❌ Found $critical_count critical issues"
+              exit 1
+            fi
+          else
+            echo "✅ No static analysis issues found"
+          fi
+      
+      - name: Upload staticcheck report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: staticcheck-report
+          path: staticcheck-report.json
+          retention-days: 30
+
+  # Job 4: Dependency security audit
+  dependency-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Install nancy (dependency scanner)
+        run: |
+          curl -L -o nancy https://github.com/sonatypeoss/nancy/releases/latest/download/nancy-v1.0.46-linux-amd64
+          chmod +x nancy
+          sudo mv nancy /usr/local/bin/
+      
+      - name: Generate dependency list
+        run: |
+          go list -json -deps ./... > go-deps.json
+      
+      - name: Run nancy dependency scan
+        run: |
+          echo "🔍 Scanning dependencies for known vulnerabilities..."
+          nancy sleuth --output-format json go-deps.json > nancy-report.json || true
+          
+          # Check results
+          if [ -s nancy-report.json ]; then
+            vulnerabilities=$(jq '.vulnerabilities | length' nancy-report.json)
+            if [ "$vulnerabilities" -gt 0 ]; then
+              echo "❌ Found $vulnerabilities dependency vulnerabilities"
+              nancy sleuth go-deps.json
+              exit 1
+            fi
+          fi
+          
+          echo "✅ No dependency vulnerabilities found"
+      
+      - name: Upload nancy report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: nancy-report
+          path: nancy-report.json
+          retention-days: 30
+
+  # Job 5: Secrets scanning
+  secrets-scan:
+    name: Secrets Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  # Job 6: SAST with Semgrep
+  semgrep-scan:
+    name: Semantic Security Analysis
+    runs-on: ubuntu-latest
+    
+    container:
+      image: returntocorp/semgrep
+    
+    if: (github.actor != 'dependabot[bot]')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - run: semgrep ci --sarif --output=semgrep.sarif
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+      
+      - name: Upload Semgrep report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
+          retention-days: 30
+
+  # Job 7: Docker image security scanning
+  docker-security:
+    name: Docker Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: docker-net-doctor:security-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'docker-net-doctor:security-test'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Job 8: Security report consolidation
+  security-report:
+    name: Security Report Summary
+    runs-on: ubuntu-latest
+    needs: [vulnerability-scan, code-security, static-analysis, dependency-audit, secrets-scan, semgrep-scan, docker-security]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+      
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary" > security-summary.md
+          echo "Generated: $(date -u)" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          # Check each scan result
+          echo "## Scan Results" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          # Govulncheck results
+          if [ -f govulncheck-report/govulncheck-report.json ]; then
+            vuln_count=$(jq '[.[] | select(.vulnerability)] | length' govulncheck-report/govulncheck-report.json 2>/dev/null || echo "0")
+            echo "- **Vulnerability Scan**: $vuln_count known vulnerabilities" >> security-summary.md
+          else
+            echo "- **Vulnerability Scan**: ✅ No vulnerabilities found" >> security-summary.md
+          fi
+          
+          # Gosec results
+          if [ -f gosec-report/gosec-report.sarif ]; then
+            gosec_issues=$(jq '.runs[0].results | length' gosec-report/gosec-report.sarif 2>/dev/null || echo "0")
+            echo "- **Code Security**: $gosec_issues potential security issues" >> security-summary.md
+          else
+            echo "- **Code Security**: ✅ Clean scan" >> security-summary.md
+          fi
+          
+          # Staticcheck results
+          if [ -f staticcheck-report/staticcheck-report.json ]; then
+            static_issues=$(jq '. | length' staticcheck-report/staticcheck-report.json 2>/dev/null || echo "0")
+            echo "- **Static Analysis**: $static_issues code quality issues" >> security-summary.md
+          else
+            echo "- **Static Analysis**: ✅ Clean scan" >> security-summary.md
+          fi
+          
+          echo "" >> security-summary.md
+          echo "## Recommendations" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "1. Review all high-severity findings" >> security-summary.md
+          echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
+          echo "3. Address any secrets or credentials in code" >> security-summary.md
+          echo "4. Consider implementing additional security measures" >> security-summary.md
+          
+          cat security-summary.md
+      
+      - name: Upload security summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-summary
+          path: security-summary.md
+          retention-days: 90
+      
+      - name: Comment on PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🛡️ Security Scan Results\n\n${summary}`
+            });

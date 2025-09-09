@@ -1,0 +1,780 @@
+package diagnostics
+
+import (
+	"context"
+	"fmt"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/zebiner/docker-net-doctor/internal/docker"
+)
+
+// Integration Tests with Diagnostic Engine
+
+func TestWorkerPoolIntegrationWithDiagnosticEngine(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx := context.Background()
+	
+	// Create worker pool for integration testing
+	pool, err := NewSecureWorkerPool(ctx, 4)
+	require.NoError(t, err)
+	
+	err = pool.Start()
+	require.NoError(t, err)
+	defer pool.Stop()
+	
+	// Add various diagnostic checks
+	checks := []Check{
+		&IntegrationCheck{name: "network_basic", duration: 100 * time.Millisecond, shouldFail: false},
+		&IntegrationCheck{name: "container_list", duration: 150 * time.Millisecond, shouldFail: false},
+		&IntegrationCheck{name: "system_info", duration: 80 * time.Millisecond, shouldFail: false},
+		&IntegrationCheck{name: "dns_resolution", duration: 200 * time.Millisecond, shouldFail: false},
+		&IntegrationCheck{name: "port_binding", duration: 120 * time.Millisecond, shouldFail: false},
+		&IntegrationCheck{name: "failing_check", duration: 50 * time.Millisecond, shouldFail: true},
+	}
+	
+	// Submit checks to worker pool
+	for _, check := range checks {
+		err := pool.Submit(check, nil)
+		require.NoError(t, err)
+	}
+	
+	// Mock Docker client for integration testing
+	mockClient := &IntegrationMockDockerClient{
+		shouldSimulateDelay: true,
+		baseDelay:          10 * time.Millisecond,
+	}
+	// Note: In real implementation, would set engine.dockerClient = mockClient
+	
+	// Run diagnostics with worker pool
+	start := time.Now()
+	
+	// Collect results from worker pool
+	results := make([]JobResult, 0)
+	resultsChan := pool.GetResults()
+	timeout := time.After(10 * time.Second)
+	
+	for len(results) < len(checks) {
+		select {
+		case result := <-resultsChan:
+			results = append(results, result)
+		case <-timeout:
+			t.Fatalf("Timeout collecting integration results, got %d/%d", len(results), len(checks))
+		}
+	}
+	
+	duration := time.Since(start)
+	
+	// Verify all checks were executed
+	assert.Equal(t, len(checks), len(results), "All checks should be executed")
+	
+	// Verify parallel execution was faster than sequential
+	expectedSequentialTime := time.Duration(0)
+	for _, check := range checks {
+		if ic, ok := check.(*IntegrationCheck); ok {
+			expectedSequentialTime += ic.duration
+		}
+	}
+	
+	// Allow some overhead but should be significantly faster
+	assert.Less(t, duration, expectedSequentialTime/2, "Parallel execution should be much faster than sequential")
+	
+	// Verify success/failure counts
+	successCount := 0
+	failureCount := 0
+	for _, result := range results {
+		if result.Result != nil && result.Result.Success {
+			successCount++
+		} else {
+			failureCount++
+		}
+	}
+	
+	assert.Equal(t, 5, successCount, "Should have 5 successful checks")
+	assert.Equal(t, 1, failureCount, "Should have 1 failed check")
+	
+	// Verify metrics are collected
+	metrics := pool.GetMetrics()
+	assert.Greater(t, metrics.TotalAPIcalls, 0, "API calls should be recorded")
+	assert.GreaterOrEqual(t, metrics.PeakMemoryMB, 0.0, "Memory usage should be recorded")
+	
+	t.Logf("Integration Test Results:")
+	t.Logf("  Duration: %v", duration)
+	t.Logf("  Checks: %d", len(results))
+	t.Logf("  Success: %d", successCount)
+	t.Logf("  Failures: %d", failureCount)
+	t.Logf("  API Calls: %d", metrics.TotalAPIcalls)
+	t.Logf("  Memory Usage: %.2f MB", metrics.PeakMemoryMB)
+}
+
+func TestConcurrentDiagnosticExecution(t *testing.T) {
+	ctx := context.Background()
+	
+	// Create worker pool for concurrent testing
+	pool, err := NewSecureWorkerPool(ctx, 6)
+	require.NoError(t, err)
+	
+	err = pool.Start()
+	require.NoError(t, err)
+	defer pool.Stop()
+	
+	// Create checks that simulate concurrent diagnostic scenarios
+	concurrentChecks := []Check{
+		&ConcurrentDiagnosticCheck{name: "network_discovery", phase: "discovery", duration: 100 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "container_inspection", phase: "inspection", duration: 150 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "volume_check", phase: "inspection", duration: 80 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "connectivity_test", phase: "testing", duration: 200 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "dns_lookup", phase: "testing", duration: 120 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "port_scan", phase: "testing", duration: 160 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "system_validation", phase: "validation", duration: 90 * time.Millisecond},
+		&ConcurrentDiagnosticCheck{name: "performance_check", phase: "validation", duration: 110 * time.Millisecond},
+	}
+	
+	for _, check := range concurrentChecks {
+		engine.AddCheck(check)
+	}
+	
+	mockClient := &IntegrationMockDockerClient{
+		shouldSimulateDelay:    true,
+		baseDelay:             5 * time.Millisecond,
+		simulateConcurrentLoad: true,
+	}
+	// Note: In real implementation, would set engine.dockerClient = mockClient
+	
+	// Execute concurrent diagnostics
+	start := time.Now()
+	results, err := engine.RunDiagnostics(ctx)
+	duration := time.Since(start)
+	
+	require.NoError(t, err)
+	require.NotNil(t, results)
+	assert.Equal(t, len(concurrentChecks), len(results.Checks), "All concurrent checks should execute")
+	
+	// Verify concurrent execution characteristics
+	maxWorkers := config.WorkerCount
+	totalWork := time.Duration(0)
+	for _, check := range concurrentChecks {
+		if cdc, ok := check.(*ConcurrentDiagnosticCheck); ok {
+			totalWork += cdc.duration
+		}
+	}
+	
+	// With perfect parallelization, should take roughly totalWork/workers
+	expectedMinTime := totalWork / time.Duration(maxWorkers)
+	expectedMaxTime := totalWork // Sequential time
+	
+	assert.Greater(t, duration, expectedMinTime/2, "Should take more than theoretical minimum")
+	assert.Less(t, duration, expectedMaxTime/2, "Should be much faster than sequential")
+	
+	// Verify phases were executed concurrently
+	phaseResults := make(map[string][]time.Time)
+	for _, result := range results.Checks {
+		if result.Details != nil {
+			if phase, ok := result.Details["phase"]; ok {
+				if phaseStr, ok := phase.(string); ok {
+					phaseResults[phaseStr] = append(phaseResults[phaseStr], result.Timestamp)
+				}
+			}
+		}
+	}
+	
+	t.Logf("Concurrent Execution Results:")
+	t.Logf("  Duration: %v", duration)
+	t.Logf("  Workers: %d", maxWorkers)
+	t.Logf("  Checks: %d", len(results.Checks))
+	for phase, timestamps := range phaseResults {
+		t.Logf("  Phase %s: %d checks", phase, len(timestamps))
+	}
+}
+
+func TestDiagnosticCheckTimeoutAndCancellation(t *testing.T) {
+	ctx := context.Background()
+	
+	config := &DiagnosticConfig{
+		WorkerCount:    3,
+		Timeout:        2 * time.Second, // Short timeout for testing
+		Parallel:       true,
+		Verbose:        true,
+		MaxMemoryMB:    30,
+		RateLimitRPS:   15,
+		RetryAttempts:  1,
+	}
+	
+	engine := NewDiagnosticEngine(config)
+	
+	// Add checks with various timeout scenarios
+	timeoutChecks := []Check{
+		&TimeoutDiagnosticCheck{name: "quick_check", duration: 100 * time.Millisecond, expectTimeout: false},
+		&TimeoutDiagnosticCheck{name: "medium_check", duration: 500 * time.Millisecond, expectTimeout: false},
+		&TimeoutDiagnosticCheck{name: "slow_check", duration: 3 * time.Second, expectTimeout: true},
+		&TimeoutDiagnosticCheck{name: "very_slow_check", duration: 5 * time.Second, expectTimeout: true},
+		&TimeoutDiagnosticCheck{name: "another_quick", duration: 50 * time.Millisecond, expectTimeout: false},
+	}
+	
+	for _, check := range timeoutChecks {
+		engine.AddCheck(check)
+	}
+	
+	mockClient := &IntegrationMockDockerClient{
+		shouldSimulateDelay: true,
+		baseDelay:          1 * time.Millisecond,
+	}
+	// Note: In real implementation, would set engine.dockerClient = mockClient
+	
+	// Run diagnostics with timeout
+	start := time.Now()
+	results, err := engine.RunDiagnostics(ctx)
+	duration := time.Since(start)
+	
+	// Should complete within timeout + some overhead
+	assert.Less(t, duration, 4*time.Second, "Should respect timeout")
+	
+	if err != nil {
+		t.Logf("Engine returned error (may be expected): %v", err)
+	}
+	
+	if results != nil {
+		// Count successful vs cancelled checks
+		successCount := 0
+		failureCount := 0
+		
+		for _, result := range results.Checks {
+			if result.Success {
+				successCount++
+			} else {
+				failureCount++
+			}
+		}
+		
+		t.Logf("Timeout Test Results:")
+		t.Logf("  Duration: %v", duration)
+		t.Logf("  Total Checks: %d", len(results.Checks))
+		t.Logf("  Successful: %d", successCount)
+		t.Logf("  Failed/Cancelled: %d", failureCount)
+		
+		// Quick checks should succeed, slow ones should fail/timeout
+		assert.GreaterOrEqual(t, successCount, 2, "Quick checks should succeed")
+		assert.GreaterOrEqual(t, failureCount, 2, "Slow checks should fail/timeout")
+	}
+}
+
+func TestResultAggregationFromMultipleWorkers(t *testing.T) {
+	ctx := context.Background()
+	
+	config := &DiagnosticConfig{
+		WorkerCount:    8, // Many workers to ensure distribution
+		Timeout:        15 * time.Second,
+		Parallel:       true,
+		Verbose:        false,
+		MaxMemoryMB:    80,
+		RateLimitRPS:   50,
+		RetryAttempts:  1,
+	}
+	
+	engine := NewDiagnosticEngine(config)
+	
+	// Create many checks to ensure worker distribution
+	numChecks := 24 // Multiple of worker count
+	var aggregationChecks []Check
+	
+	for i := 0; i < numChecks; i++ {
+		check := &AggregationCheck{
+			name:     fmt.Sprintf("aggregation_check_%02d", i),
+			workerID: -1, // Will be set by worker
+			checkID:  i,
+			duration: time.Duration(50+i*10) * time.Millisecond,
+		}
+		aggregationChecks = append(aggregationChecks, check)
+		engine.AddCheck(check)
+	}
+	
+	mockClient := &IntegrationMockDockerClient{
+		shouldSimulateDelay: true,
+		baseDelay:          2 * time.Millisecond,
+	}
+	// Note: In real implementation, would set engine.dockerClient = mockClient
+	
+	// Execute with result aggregation
+	start := time.Now()
+	results, err := engine.RunDiagnostics(ctx)
+	duration := time.Since(start)
+	
+	require.NoError(t, err)
+	require.NotNil(t, results)
+	assert.Equal(t, numChecks, len(results.Checks), "All checks should be aggregated")
+	
+	// Verify results are properly aggregated
+	checkIDs := make(map[int]bool)
+	workerDistribution := make(map[int]int)
+	
+	for _, result := range results.Checks {
+		// Verify unique check execution
+		if result.Details != nil {
+			if checkIDRaw, ok := result.Details["check_id"]; ok {
+				if checkID, ok := checkIDRaw.(int); ok {
+					assert.False(t, checkIDs[checkID], "Check ID %d should be unique", checkID)
+					checkIDs[checkID] = true
+				}
+			}
+			
+			// Track worker distribution
+			if workerIDRaw, ok := result.Details["worker_id"]; ok {
+				if workerID, ok := workerIDRaw.(int); ok {
+					workerDistribution[workerID]++
+				}
+			}
+		}
+		
+		// All aggregation checks should succeed
+		assert.True(t, result.Success, "Aggregation check should succeed")
+		assert.NotEmpty(t, result.CheckName, "Check name should be set")
+	}
+	
+	// Verify work distribution across workers
+	assert.GreaterOrEqual(t, len(workerDistribution), 2, "Work should be distributed across multiple workers")
+	
+	totalDistributed := 0
+	for workerID, count := range workerDistribution {
+		totalDistributed += count
+		t.Logf("  Worker %d: %d checks", workerID, count)
+	}
+	
+	assert.Equal(t, numChecks, totalDistributed, "All checks should be distributed")
+	
+	t.Logf("Result Aggregation Test:")
+	t.Logf("  Duration: %v", duration)
+	t.Logf("  Total Checks: %d", numChecks)
+	t.Logf("  Workers Used: %d", len(workerDistribution))
+	t.Logf("  Results Aggregated: %d", len(results.Checks))
+}
+
+func TestPerformanceProfilingOfDiagnosticOperations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping performance profiling test in short mode")
+	}
+	
+	ctx := context.Background()
+	
+	config := &DiagnosticConfig{
+		WorkerCount:    4,
+		Timeout:        20 * time.Second,
+		Parallel:       true,
+		Verbose:        false,
+		MaxMemoryMB:    100,
+		RateLimitRPS:   25,
+		RetryAttempts:  1,
+	}
+	
+	engine := NewDiagnosticEngine(config)
+	
+	// Create performance test checks
+	perfChecks := []Check{
+		&PerformanceCheck{name: "cpu_intensive", checkType: "cpu", intensity: 5},
+		&PerformanceCheck{name: "memory_intensive", checkType: "memory", intensity: 3},
+		&PerformanceCheck{name: "io_intensive", checkType: "io", intensity: 4},
+		&PerformanceCheck{name: "network_simulation", checkType: "network", intensity: 2},
+		&PerformanceCheck{name: "mixed_workload", checkType: "mixed", intensity: 3},
+	}
+	
+	for _, check := range perfChecks {
+		engine.AddCheck(check)
+	}
+	
+	mockClient := &IntegrationMockDockerClient{
+		shouldSimulateDelay: true,
+		baseDelay:          10 * time.Millisecond,
+	}
+	// Note: In real implementation, would set engine.dockerClient = mockClient
+	
+	// Profile the execution
+	var memBefore, memAfter uint64
+	var cpuBefore, cpuAfter int64
+	
+	// Baseline measurements
+	runtime.GC()
+	memBefore = getCurrentMemory()
+	cpuBefore = getCPUTime()
+	
+	start := time.Now()
+	results, err := engine.RunDiagnostics(ctx)
+	duration := time.Since(start)
+	
+	// Final measurements
+	memAfter = getCurrentMemory()
+	cpuAfter = getCPUTime()
+	runtime.GC()
+	
+	require.NoError(t, err)
+	require.NotNil(t, results)
+	
+	// Calculate performance metrics
+	memoryUsed := memAfter - memBefore
+	cpuUsed := cpuAfter - cpuBefore
+	
+	// Analyze check performance
+	var totalCheckTime time.Duration
+	var maxCheckTime time.Duration
+	var minCheckTime = time.Hour
+	
+	for _, result := range results.Checks {
+		totalCheckTime += result.Duration
+		if result.Duration > maxCheckTime {
+			maxCheckTime = result.Duration
+		}
+		if result.Duration < minCheckTime {
+			minCheckTime = result.Duration
+		}
+	}
+	
+	avgCheckTime := totalCheckTime / time.Duration(len(results.Checks))
+	efficiency := float64(totalCheckTime) / float64(duration) // Parallel efficiency
+	
+	t.Logf("Performance Profiling Results:")
+	t.Logf("  Total Duration: %v", duration)
+	t.Logf("  Memory Used: %.2f MB", float64(memoryUsed)/(1024*1024))
+	t.Logf("  CPU Time: %d ns", cpuUsed)
+	t.Logf("  Checks Executed: %d", len(results.Checks))
+	t.Logf("  Total Check Time: %v", totalCheckTime)
+	t.Logf("  Average Check Time: %v", avgCheckTime)
+	t.Logf("  Min Check Time: %v", minCheckTime)
+	t.Logf("  Max Check Time: %v", maxCheckTime)
+	t.Logf("  Parallel Efficiency: %.2f", efficiency)
+	t.Logf("  Throughput: %.2f checks/sec", float64(len(results.Checks))/duration.Seconds())
+	
+	// Performance assertions
+	assert.Less(t, duration, 10*time.Second, "Should complete within reasonable time")
+	assert.Less(t, float64(memoryUsed)/(1024*1024), 50.0, "Memory usage should be reasonable")
+	assert.Greater(t, efficiency, 1.5, "Should achieve reasonable parallelization efficiency")
+	
+	// All performance checks should succeed
+	for _, result := range results.Checks {
+		assert.True(t, result.Success, "Performance check %s should succeed", result.CheckName)
+	}
+}
+
+// Helper types for integration testing
+
+type IntegrationCheck struct {
+	name       string
+	duration   time.Duration
+	shouldFail bool
+}
+
+func (i *IntegrationCheck) Name() string        { return i.name }
+func (i *IntegrationCheck) Description() string { return "Integration test check" }
+func (i *IntegrationCheck) Severity() Severity  { return SeverityInfo }
+
+func (i *IntegrationCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+	time.Sleep(i.duration)
+	
+	if i.shouldFail {
+		return &CheckResult{
+			CheckName: i.name,
+			Success:   false,
+			Message:   "Simulated integration failure",
+			Timestamp: time.Now(),
+		}, fmt.Errorf("simulated failure")
+	}
+	
+	return &CheckResult{
+		CheckName: i.name,
+		Success:   true,
+		Message:   "Integration check completed",
+		Timestamp: time.Now(),
+	}, nil
+}
+
+type ConcurrentDiagnosticCheck struct {
+	name     string
+	phase    string
+	duration time.Duration
+}
+
+func (c *ConcurrentDiagnosticCheck) Name() string        { return c.name }
+func (c *ConcurrentDiagnosticCheck) Description() string { return "Concurrent diagnostic check" }
+func (c *ConcurrentDiagnosticCheck) Severity() Severity  { return SeverityInfo }
+
+func (c *ConcurrentDiagnosticCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+	time.Sleep(c.duration)
+	
+	return &CheckResult{
+		CheckName: c.name,
+		Success:   true,
+		Message:   fmt.Sprintf("Concurrent check in %s phase", c.phase),
+		Details: map[string]interface{}{
+			"phase":    c.phase,
+			"duration": c.duration,
+		},
+		Timestamp: time.Now(),
+	}, nil
+}
+
+type TimeoutDiagnosticCheck struct {
+	name          string
+	duration      time.Duration
+	expectTimeout bool
+}
+
+func (t *TimeoutDiagnosticCheck) Name() string        { return t.name }
+func (t *TimeoutDiagnosticCheck) Description() string { return "Timeout diagnostic check" }
+func (t *TimeoutDiagnosticCheck) Severity() Severity  { return SeverityWarning }
+
+func (t *TimeoutDiagnosticCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+	select {
+	case <-time.After(t.duration):
+		return &CheckResult{
+			CheckName: t.name,
+			Success:   true,
+			Message:   "Check completed within time",
+			Timestamp: time.Now(),
+		}, nil
+	case <-ctx.Done():
+		return &CheckResult{
+			CheckName: t.name,
+			Success:   false,
+			Message:   "Check timed out",
+			Timestamp: time.Now(),
+		}, ctx.Err()
+	}
+}
+
+type AggregationCheck struct {
+	name     string
+	workerID int
+	checkID  int
+	duration time.Duration
+}
+
+func (a *AggregationCheck) Name() string        { return a.name }
+func (a *AggregationCheck) Description() string { return "Result aggregation check" }
+func (a *AggregationCheck) Severity() Severity  { return SeverityInfo }
+
+func (a *AggregationCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+	// Simulate getting worker ID (in real implementation, this would be set by worker)
+	a.workerID = getGoroutineID() % 100 // Simple worker ID simulation
+	
+	time.Sleep(a.duration)
+	
+	return &CheckResult{
+		CheckName: a.name,
+		Success:   true,
+		Message:   fmt.Sprintf("Check %d completed by worker %d", a.checkID, a.workerID),
+		Details: map[string]interface{}{
+			"worker_id": a.workerID,
+			"check_id":  a.checkID,
+		},
+		Timestamp: time.Now(),
+	}, nil
+}
+
+type PerformanceCheck struct {
+	name      string
+	checkType string
+	intensity int
+}
+
+func (p *PerformanceCheck) Name() string        { return p.name }
+func (p *PerformanceCheck) Description() string { return "Performance test check" }
+func (p *PerformanceCheck) Severity() Severity  { return SeverityInfo }
+
+func (p *PerformanceCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+	switch p.checkType {
+	case "cpu":
+		return p.runCPUIntensive(ctx)
+	case "memory":
+		return p.runMemoryIntensive(ctx)
+	case "io":
+		return p.runIOIntensive(ctx)
+	case "network":
+		return p.runNetworkSimulation(ctx)
+	case "mixed":
+		return p.runMixedWorkload(ctx)
+	default:
+		return p.runBasicCheck(ctx)
+	}
+}
+
+func (p *PerformanceCheck) runCPUIntensive(ctx context.Context) (*CheckResult, error) {
+	iterations := p.intensity * 100000
+	result := 0
+	for i := 0; i < iterations; i++ {
+		result += i * i
+		if i%10000 == 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+		}
+	}
+	
+	return &CheckResult{
+		CheckName: p.name,
+		Success:   true,
+		Message:   fmt.Sprintf("CPU intensive work completed (result: %d)", result),
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func (p *PerformanceCheck) runMemoryIntensive(ctx context.Context) (*CheckResult, error) {
+	allocSize := p.intensity * 1024 * 1024 // MB
+	data := make([]byte, allocSize)
+	
+	for i := range data {
+		data[i] = byte(i % 256)
+		if i%100000 == 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+		}
+	}
+	
+	checksum := 0
+	for _, b := range data {
+		checksum += int(b)
+	}
+	
+	return &CheckResult{
+		CheckName: p.name,
+		Success:   true,
+		Message:   fmt.Sprintf("Memory intensive work completed (checksum: %d)", checksum),
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func (p *PerformanceCheck) runIOIntensive(ctx context.Context) (*CheckResult, error) {
+	// Simulate IO work with sleeps
+	sleepDuration := time.Duration(p.intensity*20) * time.Millisecond
+	
+	select {
+	case <-time.After(sleepDuration):
+		return &CheckResult{
+			CheckName: p.name,
+			Success:   true,
+			Message:   "IO intensive work completed",
+			Timestamp: time.Now(),
+		}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (p *PerformanceCheck) runNetworkSimulation(ctx context.Context) (*CheckResult, error) {
+	// Simulate network delays
+	delays := p.intensity * 5
+	for i := 0; i < delays; i++ {
+		select {
+		case <-time.After(10 * time.Millisecond):
+			// Continue
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	
+	return &CheckResult{
+		CheckName: p.name,
+		Success:   true,
+		Message:   "Network simulation completed",
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func (p *PerformanceCheck) runMixedWorkload(ctx context.Context) (*CheckResult, error) {
+	// Mix of CPU, memory, and IO
+	
+	// CPU work
+	for i := 0; i < p.intensity*10000; i++ {
+		_ = i * i
+	}
+	
+	// Memory work
+	data := make([]byte, p.intensity*1024*100) // 100KB per intensity
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+	
+	// IO simulation
+	select {
+	case <-time.After(time.Duration(p.intensity*10) * time.Millisecond):
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	
+	return &CheckResult{
+		CheckName: p.name,
+		Success:   true,
+		Message:   "Mixed workload completed",
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func (p *PerformanceCheck) runBasicCheck(ctx context.Context) (*CheckResult, error) {
+	time.Sleep(time.Duration(p.intensity*50) * time.Millisecond)
+	
+	return &CheckResult{
+		CheckName: p.name,
+		Success:   true,
+		Message:   "Basic performance check completed",
+		Timestamp: time.Now(),
+	}, nil
+}
+
+// Mock Docker Client for integration testing
+
+type IntegrationMockDockerClient struct {
+	shouldSimulateDelay    bool
+	baseDelay             time.Duration
+	simulateConcurrentLoad bool
+	callCount             atomic.Int64
+}
+
+func (m *IntegrationMockDockerClient) ListContainers(ctx context.Context) ([]types.Container, error) {
+	if m.shouldSimulateDelay {
+		delay := m.baseDelay
+		if m.simulateConcurrentLoad {
+			// Add some variance based on concurrent load
+			variance := time.Duration(m.callCount.Add(1) % 5) * time.Millisecond
+			delay += variance
+		}
+		time.Sleep(delay)
+	}
+	
+	return []types.Container{}, nil
+}
+
+func (m *IntegrationMockDockerClient) GetContainerNetworkConfig(containerID string) (*docker.ContainerNetworkInfo, error) {
+	if m.shouldSimulateDelay {
+		time.Sleep(m.baseDelay)
+	}
+	return &docker.ContainerNetworkInfo{}, nil
+}
+
+func (m *IntegrationMockDockerClient) ExecInContainer(ctx context.Context, containerID string, cmd []string) (string, error) {
+	if m.shouldSimulateDelay {
+		time.Sleep(m.baseDelay)
+	}
+	return "mock_exec_output", nil
+}
+
+// Helper functions
+
+func getGoroutineID() int {
+	// Simple goroutine ID simulation for testing
+	return int(time.Now().UnixNano() % 1000)
+}
+
+func getCPUTime() int64 {
+	// Simple CPU time simulation
+	return time.Now().UnixNano()
+}

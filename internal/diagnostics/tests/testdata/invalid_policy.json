@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "security_policies": {
+    "validation_rules": {
+      "check_name_validation": {
+        "enabled": true,
+        "severity": "invalid_severity",
+        "max_length": -100,
+        "allowed_patterns": ["[invalid_regex"],
+        "forbidden_patterns": null
+      }
+    },
+    "allowlist": {
+      "default_checks": 123,
+      "custom_patterns": "not_an_array"
+    }
+  }
+}

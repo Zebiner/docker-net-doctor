@@ -514,6 +514,9 @@ func (m *MemoryMonitor) IsOverLimit() bool {
 	defer m.mu.RUnlock()
 	
 	current := getCurrentMemory()
+	if current <= m.baseline {
+		return false // No additional memory used
+	}
 	additionalMemory := current - m.baseline
 	return additionalMemory > (MAX_MEMORY_MB * 1024 * 1024)
 }
@@ -521,7 +524,10 @@ func (m *MemoryMonitor) IsOverLimit() bool {
 func (m *MemoryMonitor) GetPeakUsage() uint64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.peakUsage - m.baseline
+	if m.peakUsage > m.baseline {
+		return m.peakUsage - m.baseline
+	}
+	return 0 // Prevent underflow when peak is less than baseline
 }
 
 // ErrorRateMonitor implementation

@@ -1,0 +1,611 @@
+# Pipeline Performance Monitoring Configuration
+# Tracks execution times, resource usage, and optimization opportunities
+
+name: Pipeline Performance Monitor
+
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline", "Release Automation"]
+    types: [completed]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Mondays at 6 AM UTC
+  workflow_dispatch:
+    inputs:
+      analysis_period:
+        description: 'Analysis period in days'
+        type: number
+        default: 7
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  # Job 1: Collect pipeline metrics
+  collect-metrics:
+    name: Collect Pipeline Metrics
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      metrics-collected: ${{ steps.collect.outputs.success }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js for API calls
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Collect workflow metrics
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Create metrics collection script
+          cat > collect_metrics.js << 'EOF'
+          const { execSync } = require('child_process');
+          
+          async function collectMetrics() {
+            const period = process.env.ANALYSIS_PERIOD || '7';
+            const since = new Date(Date.now() - period * 24 * 60 * 60 * 1000).toISOString();
+            
+            console.log(`Collecting metrics since: ${since}`);
+            
+            try {
+              // Get workflow runs for the last period
+              const ciRuns = JSON.parse(execSync(`gh api repos/${{ github.repository }}/actions/workflows/ci.yml/runs --jq '[.workflow_runs[] | select(.created_at >= "${since}")]'`).toString());
+              const releaseRuns = JSON.parse(execSync(`gh api repos/${{ github.repository }}/actions/workflows/release.yml/runs --jq '[.workflow_runs[] | select(.created_at >= "${since}")]'`).toString());
+              
+              // Calculate CI pipeline metrics
+              const ciMetrics = calculatePipelineMetrics(ciRuns, 'CI/CD Pipeline');
+              const releaseMetrics = calculatePipelineMetrics(releaseRuns, 'Release Automation');
+              
+              // Generate performance report
+              const report = {
+                period: `${period} days`,
+                collectedAt: new Date().toISOString(),
+                target: {
+                  ci: '10 minutes',
+                  release: '15 minutes'
+                },
+                ci: ciMetrics,
+                release: releaseMetrics,
+                recommendations: generateRecommendations(ciMetrics, releaseMetrics)
+              };
+              
+              console.log(JSON.stringify(report, null, 2));
+              
+              // Save metrics
+              require('fs').writeFileSync('pipeline-metrics.json', JSON.stringify(report, null, 2));
+              
+              return true;
+            } catch (error) {
+              console.error('Error collecting metrics:', error);
+              return false;
+            }
+          }
+          
+          function calculatePipelineMetrics(runs, pipelineName) {
+            if (runs.length === 0) {
+              return {
+                name: pipelineName,
+                totalRuns: 0,
+                avgDuration: 0,
+                successRate: 0,
+                failureRate: 0,
+                durations: []
+              };
+            }
+            
+            const durations = runs.map(run => {
+              if (run.updated_at && run.created_at) {
+                return Math.round((new Date(run.updated_at) - new Date(run.created_at)) / 1000 / 60); // minutes
+              }
+              return 0;
+            }).filter(d => d > 0);
+            
+            const successful = runs.filter(run => run.conclusion === 'success').length;
+            const failed = runs.filter(run => run.conclusion === 'failure').length;
+            
+            return {
+              name: pipelineName,
+              totalRuns: runs.length,
+              avgDuration: durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0,
+              minDuration: durations.length > 0 ? Math.min(...durations) : 0,
+              maxDuration: durations.length > 0 ? Math.max(...durations) : 0,
+              p95Duration: durations.length > 0 ? calculatePercentile(durations, 95) : 0,
+              successRate: runs.length > 0 ? Math.round((successful / runs.length) * 100) : 0,
+              failureRate: runs.length > 0 ? Math.round((failed / runs.length) * 100) : 0,
+              durations: durations
+            };
+          }
+          
+          function calculatePercentile(values, percentile) {
+            const sorted = values.sort((a, b) => a - b);
+            const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+            return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+          }
+          
+          function generateRecommendations(ciMetrics, releaseMetrics) {
+            const recommendations = [];
+            
+            // CI pipeline recommendations
+            if (ciMetrics.avgDuration > 10) {
+              recommendations.push({
+                type: 'performance',
+                priority: 'high',
+                pipeline: 'CI/CD',
+                issue: `Average duration ${ciMetrics.avgDuration}min exceeds 10min target`,
+                suggestion: 'Consider reducing test scope or increasing parallelization'
+              });
+            }
+            
+            if (ciMetrics.p95Duration > 15) {
+              recommendations.push({
+                type: 'performance',
+                priority: 'medium',
+                pipeline: 'CI/CD',
+                issue: `95th percentile duration ${ciMetrics.p95Duration}min is too high`,
+                suggestion: 'Investigate slow-running jobs and optimize caching'
+              });
+            }
+            
+            if (ciMetrics.failureRate > 10) {
+              recommendations.push({
+                type: 'reliability',
+                priority: 'high',
+                pipeline: 'CI/CD',
+                issue: `Failure rate ${ciMetrics.failureRate}% is above acceptable threshold`,
+                suggestion: 'Investigate flaky tests and improve error handling'
+              });
+            }
+            
+            // Release pipeline recommendations
+            if (releaseMetrics.avgDuration > 15) {
+              recommendations.push({
+                type: 'performance',
+                priority: 'medium',
+                pipeline: 'Release',
+                issue: `Average duration ${releaseMetrics.avgDuration}min exceeds 15min target`,
+                suggestion: 'Optimize build matrix and artifact generation'
+              });
+            }
+            
+            return recommendations;
+          }
+          
+          collectMetrics().then(success => {
+            process.exit(success ? 0 : 1);
+          });
+          EOF
+          
+          # Run metrics collection
+          ANALYSIS_PERIOD="${{ inputs.analysis_period || 7 }}" node collect_metrics.js
+          
+          if [ $? -eq 0 ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload metrics data
+        if: steps.collect.outputs.success == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-metrics
+          path: pipeline-metrics.json
+          retention-days: 30
+
+  # Job 2: Generate performance report
+  generate-report:
+    name: Generate Performance Report
+    runs-on: ubuntu-latest
+    needs: collect-metrics
+    if: needs.collect-metrics.outputs.metrics-collected == 'true'
+    timeout-minutes: 3
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-metrics
+
+      - name: Generate performance report
+        run: |
+          # Create report generator
+          cat > generate_report.py << 'EOF'
+          import json
+          import sys
+          from datetime import datetime
+          
+          def generate_markdown_report(metrics):
+              report_lines = [
+                  f"# 🚀 Pipeline Performance Report",
+                  f"",
+                  f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}  ",
+                  f"**Analysis Period:** {metrics['period']}  ",
+                  f"**Target Performance:** CI ≤ {metrics['target']['ci']}, Release ≤ {metrics['target']['release']}",
+                  f"",
+                  f"## 📊 Performance Summary",
+                  f""
+              ]
+              
+              # CI Pipeline Summary
+              ci = metrics['ci']
+              if ci['totalRuns'] > 0:
+                  status_emoji = "✅" if ci['avgDuration'] <= 10 else "⚠️" if ci['avgDuration'] <= 15 else "❌"
+                  report_lines.extend([
+                      f"### {status_emoji} CI/CD Pipeline",
+                      f"",
+                      f"| Metric | Value | Status |",
+                      f"|--------|-------|--------|",
+                      f"| Total Runs | {ci['totalRuns']} | - |",
+                      f"| Average Duration | {ci['avgDuration']} min | {'🎯' if ci['avgDuration'] <= 10 else '⚠️'} |",
+                      f"| Min Duration | {ci['minDuration']} min | - |",
+                      f"| Max Duration | {ci['maxDuration']} min | - |",
+                      f"| 95th Percentile | {ci['p95Duration']} min | {'🎯' if ci['p95Duration'] <= 15 else '⚠️'} |",
+                      f"| Success Rate | {ci['successRate']}% | {'✅' if ci['successRate'] >= 95 else '⚠️'} |",
+                      f"| Failure Rate | {ci['failureRate']}% | {'✅' if ci['failureRate'] <= 5 else '❌'} |",
+                      f""
+                  ])
+              else:
+                  report_lines.extend([
+                      f"### CI/CD Pipeline",
+                      f"",
+                      f"No runs found in the analysis period.",
+                      f""
+                  ])
+              
+              # Release Pipeline Summary
+              release = metrics['release']
+              if release['totalRuns'] > 0:
+                  status_emoji = "✅" if release['avgDuration'] <= 15 else "⚠️" if release['avgDuration'] <= 20 else "❌"
+                  report_lines.extend([
+                      f"### {status_emoji} Release Automation",
+                      f"",
+                      f"| Metric | Value | Status |",
+                      f"|--------|-------|--------|",
+                      f"| Total Runs | {release['totalRuns']} | - |",
+                      f"| Average Duration | {release['avgDuration']} min | {'🎯' if release['avgDuration'] <= 15 else '⚠️'} |",
+                      f"| Min Duration | {release['minDuration']} min | - |",
+                      f"| Max Duration | {release['maxDuration']} min | - |",
+                      f"| 95th Percentile | {release['p95Duration']} min | {'🎯' if release['p95Duration'] <= 20 else '⚠️'} |",
+                      f"| Success Rate | {release['successRate']}% | {'✅' if release['successRate'] >= 90 else '⚠️'} |",
+                      f"| Failure Rate | {release['failureRate']}% | {'✅' if release['failureRate'] <= 10 else '❌'} |",
+                      f""
+                  ])
+              else:
+                  report_lines.extend([
+                      f"### Release Automation",
+                      f"",
+                      f"No releases found in the analysis period.",
+                      f""
+                  ])
+              
+              # Recommendations
+              recommendations = metrics.get('recommendations', [])
+              if recommendations:
+                  report_lines.extend([
+                      f"## 🎯 Optimization Recommendations",
+                      f""
+                  ])
+                  
+                  high_priority = [r for r in recommendations if r['priority'] == 'high']
+                  medium_priority = [r for r in recommendations if r['priority'] == 'medium']
+                  
+                  if high_priority:
+                      report_lines.extend([
+                          f"### 🔴 High Priority",
+                          f""
+                      ])
+                      for rec in high_priority:
+                          report_lines.extend([
+                              f"**{rec['pipeline']} - {rec['issue']}**",
+                              f"- **Type:** {rec['type']}",
+                              f"- **Suggestion:** {rec['suggestion']}",
+                              f""
+                          ])
+                  
+                  if medium_priority:
+                      report_lines.extend([
+                          f"### 🟡 Medium Priority",
+                          f""
+                      ])
+                      for rec in medium_priority:
+                          report_lines.extend([
+                              f"**{rec['pipeline']} - {rec['issue']}**",
+                              f"- **Type:** {rec['type']}",
+                              f"- **Suggestion:** {rec['suggestion']}",
+                              f""
+                          ])
+              else:
+                  report_lines.extend([
+                      f"## ✅ No Optimization Recommendations",
+                      f"",
+                      f"All pipelines are performing within acceptable parameters!",
+                      f""
+                  ])
+              
+              # Performance Trends (if we had historical data)
+              report_lines.extend([
+                  f"## 📈 Optimization Strategies Implemented",
+                  f"",
+                  f"### Current Optimizations:",
+                  f"- ✅ **Parallel Job Execution**: Jobs run concurrently where possible",
+                  f"- ✅ **Aggressive Caching**: Go modules, build cache, and Docker layers cached",
+                  f"- ✅ **Early Validation**: Quick feedback with fail-fast strategies",
+                  f"- ✅ **Conditional Execution**: Jobs skip when changes don't require them",
+                  f"- ✅ **Matrix Builds**: Cross-platform builds run in parallel",
+                  f"- ✅ **Resource Optimization**: Appropriate timeouts and resource allocation",
+                  f"",
+                  f"### Future Optimization Opportunities:",
+                  f"- 🔄 **Smart Test Selection**: Run only tests affected by changes",
+                  f"- 🔄 **Build Artifact Reuse**: Share build artifacts between jobs more efficiently",
+                  f"- 🔄 **Advanced Caching**: Implement more granular caching strategies",
+                  f"- 🔄 **Job Dependencies**: Further optimize job dependency graphs",
+                  f""
+              ])
+              
+              # Footer
+              report_lines.extend([
+                  f"---",
+                  f"*This report was automatically generated by the Pipeline Performance Monitor.*",
+                  f"*For questions or suggestions, please create an issue in the repository.*"
+              ])
+              
+              return "\n".join(report_lines)
+          
+          # Generate the report
+          try:
+              with open('pipeline-metrics.json', 'r') as f:
+                  metrics = json.load(f)
+              
+              report = generate_markdown_report(metrics)
+              
+              with open('performance-report.md', 'w') as f:
+                  f.write(report)
+              
+              print("Performance report generated successfully!")
+              print("=" * 50)
+              print(report)
+              
+          except Exception as e:
+              print(f"Error generating report: {e}")
+              sys.exit(1)
+          EOF
+          
+          python3 generate_report.py
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: performance-report.md
+          retention-days: 90
+
+      - name: Comment on latest commit (if push event)
+        if: github.event.workflow_run.event == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = fs.readFileSync('performance-report.md', 'utf8');
+              const sha = '${{ github.event.workflow_run.head_sha }}';
+              
+              // Create a comment on the commit
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: sha,
+                body: `## 📊 Pipeline Performance Report\n\n${report}`
+              });
+              
+              console.log('Performance report posted as commit comment');
+            } catch (error) {
+              console.log('Could not post performance report:', error.message);
+            }
+
+  # Job 3: Create performance dashboard data
+  update-dashboard:
+    name: Update Performance Dashboard
+    runs-on: ubuntu-latest
+    needs: [collect-metrics, generate-report]
+    if: needs.collect-metrics.outputs.metrics-collected == 'true'
+    timeout-minutes: 2
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Download metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-metrics
+
+      - name: Download report
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-report
+
+      - name: Update dashboard files
+        run: |
+          # Create/update performance dashboard directory
+          mkdir -p .github/performance-dashboard
+          
+          # Copy latest metrics
+          cp pipeline-metrics.json .github/performance-dashboard/latest-metrics.json
+          
+          # Archive historical metrics
+          TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+          cp pipeline-metrics.json ".github/performance-dashboard/metrics-${TIMESTAMP}.json"
+          
+          # Update dashboard README
+          cp performance-report.md .github/performance-dashboard/README.md
+          
+          # Create simple JSON for badges/external tools
+          cat > .github/performance-dashboard/status.json << EOF
+          {
+            "lastUpdated": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "ciAvgDuration": $(jq '.ci.avgDuration' pipeline-metrics.json),
+            "releaseAvgDuration": $(jq '.release.avgDuration' pipeline-metrics.json),
+            "ciSuccessRate": $(jq '.ci.successRate' pipeline-metrics.json),
+            "releaseSuccessRate": $(jq '.release.successRate' pipeline-metrics.json),
+            "ciTarget": 10,
+            "releaseTarget": 15,
+            "status": "$(if [ $(jq '.ci.avgDuration' pipeline-metrics.json) -le 10 ]; then echo "passing"; else echo "warning"; fi)"
+          }
+          EOF
+          
+          echo "Dashboard files updated:"
+          ls -la .github/performance-dashboard/
+
+      - name: Commit dashboard updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add .github/performance-dashboard/
+          
+          if git diff --staged --quiet; then
+            echo "No dashboard changes to commit"
+          else
+            git commit -m "📊 Update pipeline performance dashboard
+
+            - Updated performance metrics
+            - Generated latest performance report
+            - Archived historical data
+
+            🤖 Generated by pipeline performance monitor"
+            git push
+            echo "✅ Dashboard updated and pushed"
+          fi
+
+  # Job 4: Performance alerting
+  performance-alerts:
+    name: Performance Alerting
+    runs-on: ubuntu-latest
+    needs: collect-metrics
+    if: needs.collect-metrics.outputs.metrics-collected == 'true'
+    timeout-minutes: 2
+    
+    steps:
+      - name: Download metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-metrics
+
+      - name: Check performance thresholds
+        id: alerts
+        run: |
+          # Extract key metrics
+          CI_AVG=$(jq '.ci.avgDuration' pipeline-metrics.json)
+          RELEASE_AVG=$(jq '.release.avgDuration' pipeline-metrics.json)
+          CI_FAILURE_RATE=$(jq '.ci.failureRate' pipeline-metrics.json)
+          RELEASE_FAILURE_RATE=$(jq '.release.failureRate' pipeline-metrics.json)
+          
+          ALERTS=()
+          
+          # Check CI performance thresholds
+          if (( $(echo "$CI_AVG > 12" | bc -l) )); then
+            ALERTS+=("🚨 CI pipeline average duration ${CI_AVG}min exceeds alert threshold (12min)")
+          fi
+          
+          # Check release performance thresholds
+          if (( $(echo "$RELEASE_AVG > 18" | bc -l) )); then
+            ALERTS+=("🚨 Release pipeline average duration ${RELEASE_AVG}min exceeds alert threshold (18min)")
+          fi
+          
+          # Check failure rates
+          if (( $(echo "$CI_FAILURE_RATE > 15" | bc -l) )); then
+            ALERTS+=("🚨 CI pipeline failure rate ${CI_FAILURE_RATE}% exceeds alert threshold (15%)")
+          fi
+          
+          if (( $(echo "$RELEASE_FAILURE_RATE > 20" | bc -l) )); then
+            ALERTS+=("🚨 Release pipeline failure rate ${RELEASE_FAILURE_RATE}% exceeds alert threshold (20%)")
+          fi
+          
+          # Output alerts
+          if [ ${#ALERTS[@]} -gt 0 ]; then
+            echo "alerts-found=true" >> $GITHUB_OUTPUT
+            printf '%s\n' "${ALERTS[@]}" > alerts.txt
+            echo "Performance alerts:"
+            cat alerts.txt
+          else
+            echo "alerts-found=false" >> $GITHUB_OUTPUT
+            echo "✅ All performance metrics within acceptable thresholds"
+          fi
+
+      - name: Create alert issue
+        if: steps.alerts.outputs.alerts-found == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const alerts = fs.readFileSync('alerts.txt', 'utf8').trim().split('\n');
+            
+            const alertsText = alerts.map(alert => `- ${alert}`).join('\n');
+            
+            // Check if there's already an open performance alert issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'performance-alert',
+              state: 'open'
+            });
+            
+            const issueBody = `## 🚨 Pipeline Performance Alert
+            
+            Performance metrics have exceeded acceptable thresholds:
+            
+            ${alertsText}
+            
+            ## 🔍 Investigation Steps
+            
+            1. Review recent pipeline runs for performance regressions
+            2. Check for increased test complexity or new resource-intensive operations
+            3. Verify caching is working effectively
+            4. Consider infrastructure changes or GitHub Actions runner performance
+            
+            ## 📊 Performance Data
+            
+            View the latest performance dashboard: [Performance Dashboard](.github/performance-dashboard/README.md)
+            
+            ## ✅ Resolution
+            
+            Close this issue once performance returns to acceptable levels.
+            
+            ---
+            *This alert was automatically generated by the Pipeline Performance Monitor.*
+            *Alert thresholds: CI ≤ 12min, Release ≤ 18min, Failure rates ≤ 15-20%*`;
+            
+            if (issues.data.length === 0) {
+              // Create new alert issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 Pipeline Performance Alert - Thresholds Exceeded',
+                body: issueBody,
+                labels: ['performance-alert', 'bug', 'priority-high']
+              });
+              console.log('Created new performance alert issue');
+            } else {
+              // Update existing alert issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `## 🔄 Updated Performance Alert\n\n${alertsText}\n\n*Updated: ${new Date().toISOString()}*`
+              });
+              console.log('Updated existing performance alert issue');
+            }

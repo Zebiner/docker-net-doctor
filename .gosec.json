@@ -1,0 +1,212 @@
+{
+  "severity": "medium",
+  "confidence": "medium",
+  "rules": {
+    "G101": {
+      "enabled": true,
+      "severity": "high",
+      "description": "Look for hard coded credentials"
+    },
+    "G102": {
+      "enabled": true,
+      "severity": "medium", 
+      "description": "Bind to all interfaces"
+    },
+    "G103": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Audit the use of unsafe block"
+    },
+    "G104": {
+      "enabled": true,
+      "severity": "low",
+      "description": "Audit errors not checked"
+    },
+    "G105": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Audit the use of big.Exp function"
+    },
+    "G106": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Audit the use of ssh.InsecureIgnoreHostKey"
+    },
+    "G107": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Url provided to HTTP request as taint input"
+    },
+    "G108": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Profiling endpoint automatically exposed on /debug/pprof"
+    },
+    "G109": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Potential integer overflow when converting to string"
+    },
+    "G110": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Potential DoS vulnerability via decompression bomb"
+    },
+    "G201": {
+      "enabled": true,
+      "severity": "high",
+      "description": "SQL query construction using format string"
+    },
+    "G202": {
+      "enabled": true,
+      "severity": "high",
+      "description": "SQL query construction using string concatenation"
+    },
+    "G203": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Use of unescaped data in HTML templates"
+    },
+    "G204": {
+      "enabled": true,
+      "severity": "high",
+      "description": "Audit use of command execution"
+    },
+    "G301": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Poor file permissions used when creating a directory"
+    },
+    "G302": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Poor file permissions used with chmod"
+    },
+    "G303": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Creating tempfile using a predictable path"
+    },
+    "G304": {
+      "enabled": true,
+      "severity": "high",
+      "description": "File path provided as taint input"
+    },
+    "G305": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "File traversal when extracting zip/tar archive"
+    },
+    "G306": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Poor file permissions used when writing to a new file"
+    },
+    "G307": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Poor file permissions used when creating a file with os.Create"
+    },
+    "G401": {
+      "enabled": true,
+      "severity": "high",
+      "description": "Detect the usage of DES, RC4, MD5 or SHA1"
+    },
+    "G402": {
+      "enabled": true,
+      "severity": "high",
+      "description": "Look for bad TLS connection settings"
+    },
+    "G403": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Ensure minimum RSA key length of 2048 bits"
+    },
+    "G404": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Insecure random number source (rand)"
+    },
+    "G501": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Import blocklist: crypto/md5"
+    },
+    "G502": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Import blocklist: crypto/des"
+    },
+    "G503": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Import blocklist: crypto/rc4"
+    },
+    "G504": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Import blocklist: net/http/cgi"
+    },
+    "G505": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Import blocklist: crypto/sha1"
+    },
+    "G601": {
+      "enabled": true,
+      "severity": "medium",
+      "description": "Implicit memory aliasing of items from a range statement"
+    }
+  },
+  "excludes": [
+    "G104"
+  ],
+  "include": [
+    "G101",
+    "G102",
+    "G103",
+    "G105",
+    "G106",
+    "G107",
+    "G108",
+    "G109",
+    "G110",
+    "G201",
+    "G202",
+    "G203",
+    "G204",
+    "G301",
+    "G302",
+    "G303",
+    "G304",
+    "G305",
+    "G306",
+    "G307",
+    "G401",
+    "G402",
+    "G403",
+    "G404",
+    "G501",
+    "G502", 
+    "G503",
+    "G504",
+    "G505",
+    "G601"
+  ],
+  "exclude-generated": true,
+  "exclude-dirs": [
+    "vendor",
+    "test",
+    "testdata",
+    ".git"
+  ],
+  "nostats": false,
+  "show-ignored": false,
+  "track-suppressions": false,
+  "sort": true,
+  "log": "",
+  "output": {
+    "format": "sarif",
+    "output": "gosec-report.sarif"
+  }
+}

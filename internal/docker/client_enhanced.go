@@ -8,6 +8,8 @@ import (
 	"time"
 	
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"golang.org/x/time/rate"
 )
@@ -178,7 +180,7 @@ func (ec *EnhancedClient) ListContainers(ctx context.Context) ([]types.Container
 	var containers []types.Container
 	err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error {
 		result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) {
-			return ec.docker.ContainerList(execCtx, types.ContainerListOptions{
+			return ec.docker.ContainerList(execCtx, container.ListOptions{
 				All: false, // Only running containers
 			})
 		})
@@ -209,17 +211,17 @@ func (ec *EnhancedClient) GetNetworkInfo() ([]NetworkDiagnostic, error) {
 	// Try to get from cache using GetOrCompute
 	result, err := ec.cache.GetOrCompute(ctx, "network:diagnostics", func() (interface{}, error) {
 		// Execute with rate limiting
-		var networks []types.NetworkResource
+		var networks []network.Summary
 		err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error {
 			result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) {
-				return ec.docker.NetworkList(execCtx, types.NetworkListOptions{})
+				return ec.docker.NetworkList(execCtx, network.ListOptions{})
 			})
 			
 			if err != nil {
 				return err
 			}
 			
-			networks = result.([]types.NetworkResource)
+			networks = result.([]network.Summary)
 			return nil
 		})
 		
@@ -231,10 +233,10 @@ func (ec *EnhancedClient) GetNetworkInfo() ([]NetworkDiagnostic, error) {
 		var diagnostics []NetworkDiagnostic
 		for _, net := range networks {
 			// Inspect each network with rate limiting
-			var netInspect types.NetworkResource
+			var netInspect network.Inspect
 			err := ec.executeWithRateLimit(ctx, "network_inspect", func(execCtx context.Context) error {
 				result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) {
-					return ec.docker.NetworkInspect(execCtx, net.ID, types.NetworkInspectOptions{
+					return ec.docker.NetworkInspect(execCtx, net.ID, network.InspectOptions{
 						Verbose: true,
 					})
 				})
@@ -243,7 +245,7 @@ func (ec *EnhancedClient) GetNetworkInfo() ([]NetworkDiagnostic, error) {
 					return err
 				}
 				
-				netInspect = result.(types.NetworkResource)
+				netInspect = result.(network.Inspect)
 				return nil
 			})
 			
@@ -348,7 +350,7 @@ func (ec *EnhancedClient) ExecInContainer(ctx context.Context, containerID strin
 	var output string
 	err := ec.executeWithRateLimit(ctx, operation, func(execCtx context.Context) error {
 		result, err := ec.retryPolicy.ExecuteWithValue(execCtx, func() (interface{}, error) {
-			execConfig := types.ExecConfig{
+			execConfig := container.ExecOptions{
 				AttachStdout: true,
 				AttachStderr: true,
 				Cmd:         cmd,
@@ -359,7 +361,7 @@ func (ec *EnhancedClient) ExecInContainer(ctx context.Context, containerID strin
 				return "", fmt.Errorf("failed to create exec: %w", err)
 			}
 			
-			response, err := ec.docker.ContainerExecAttach(execCtx, execCreate.ID, types.ExecStartCheck{})
+			response, err := ec.docker.ContainerExecAttach(execCtx, execCreate.ID, container.ExecStartOptions{})
 			if err != nil {
 				return "", fmt.Errorf("failed to start exec: %w", err)
 			}

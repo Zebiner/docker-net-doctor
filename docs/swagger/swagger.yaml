@@ -1,0 +1,246 @@
+basePath: /api/v1
+definitions:
+  github_com_zebiner_docker-net-doctor_internal_diagnostics.CheckResult:
+    properties:
+      checkName:
+        type: string
+      details:
+        additionalProperties: true
+        description: Additional diagnostic data
+        type: object
+      duration:
+        allOf:
+        - $ref: '#/definitions/time.Duration'
+        description: 'New: execution time'
+      message:
+        type: string
+      success:
+        type: boolean
+      suggestions:
+        description: Suggested fixes
+        items:
+          type: string
+        type: array
+      timestamp:
+        type: string
+    type: object
+  github_com_zebiner_docker-net-doctor_internal_diagnostics.ExecutionMetrics:
+    properties:
+      apicallsCount:
+        format: int64
+        type: integer
+      averageCheckTime:
+        $ref: '#/definitions/time.Duration'
+      errorRate:
+        format: float64
+        type: number
+      maxCheckTime:
+        $ref: '#/definitions/time.Duration'
+      memoryUsageMB:
+        format: float64
+        type: number
+      minCheckTime:
+        $ref: '#/definitions/time.Duration'
+      parallelExecution:
+        type: boolean
+      rateLimitHits:
+        format: int64
+        type: integer
+      totalDuration:
+        $ref: '#/definitions/time.Duration'
+      workerCount:
+        type: integer
+    type: object
+  github_com_zebiner_docker-net-doctor_internal_diagnostics.Results:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/github_com_zebiner_docker-net-doctor_internal_diagnostics.CheckResult'
+        type: array
+      duration:
+        $ref: '#/definitions/time.Duration'
+      metrics:
+        allOf:
+        - $ref: '#/definitions/github_com_zebiner_docker-net-doctor_internal_diagnostics.ExecutionMetrics'
+        description: 'New: performance metrics'
+      summary:
+        $ref: '#/definitions/github_com_zebiner_docker-net-doctor_internal_diagnostics.Summary'
+    type: object
+  github_com_zebiner_docker-net-doctor_internal_diagnostics.Summary:
+    properties:
+      criticalIssues:
+        items:
+          type: string
+        type: array
+      failedChecks:
+        type: integer
+      passedChecks:
+        type: integer
+      totalChecks:
+        type: integer
+      warningChecks:
+        type: integer
+    type: object
+  time.Duration:
+    enum:
+    - -9223372036854775808
+    - 9223372036854775807
+    - 1
+    - 1000
+    - 1000000
+    - 1000000000
+    - 60000000000
+    - 3600000000000
+    - 1
+    - 1000
+    - 1000000
+    - 1000000000
+    - 60000000000
+    - 3600000000000
+    format: int64
+    type: integer
+    x-enum-varnames:
+    - minDuration
+    - maxDuration
+    - Nanosecond
+    - Microsecond
+    - Millisecond
+    - Second
+    - Minute
+    - Hour
+    - Nanosecond
+    - Microsecond
+    - Millisecond
+    - Second
+    - Minute
+    - Hour
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: http://www.github.com/zebiner/docker-net-doctor
+  description: A comprehensive diagnostic tool for Docker networking issues
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Docker Network Doctor API
+  version: "1.0"
+paths:
+  /check/{checkType}:
+    post:
+      consumes:
+      - application/json
+      description: Creates the cobra command for running specific diagnostic checks
+      parameters:
+      - description: Type of check to run
+        enum:
+        - dns
+        - bridge
+        - connectivity
+        - ports
+        - iptables
+        - forwarding
+        - mtu
+        - overlap
+        in: path
+        name: checkType
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_zebiner_docker-net-doctor_internal_diagnostics.Results'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Check type not found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create check command
+      tags:
+      - commands
+  /diagnose:
+    post:
+      consumes:
+      - application/json
+      description: Creates the cobra command for running comprehensive diagnostics
+      parameters:
+      - description: Filter diagnostics to specific container
+        in: query
+        name: container
+        type: string
+      - description: Filter diagnostics to specific network
+        in: query
+        name: network
+        type: string
+      - default: true
+        description: Run checks in parallel
+        in: query
+        name: parallel
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_zebiner_docker-net-doctor_internal_diagnostics.Results'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create diagnose command
+      tags:
+      - commands
+  /report:
+    post:
+      consumes:
+      - application/json
+      description: Creates the cobra command for generating detailed diagnostic reports
+      parameters:
+      - description: Save report to file
+        in: query
+        name: output-file
+        type: string
+      - description: Include system configuration
+        in: query
+        name: include-system
+        type: boolean
+      - description: Include container logs
+        in: query
+        name: include-logs
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Report generated successfully
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create report command
+      tags:
+      - commands
+swagger: "2.0"

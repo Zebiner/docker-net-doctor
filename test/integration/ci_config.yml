@@ -1,0 +1,111 @@
+# Docker-in-Docker CI/CD Configuration for Integration Tests
+# This configuration supports various CI/CD platforms with Docker-in-Docker capabilities
+
+version: '3.8'
+
+services:
+  # Docker-in-Docker service for CI/CD environments
+  docker-dind:
+    image: docker:25-dind
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+      - DOCKER_DRIVER=overlay2
+    volumes:
+      - docker-certs-ca:/certs/ca
+      - docker-certs-client:/certs/client
+    ports:
+      - "2376:2376"
+    networks:
+      - ci-network
+
+  # Test runner service
+  integration-tests:
+    image: golang:1.23-alpine
+    working_dir: /app
+    environment:
+      - DOCKER_HOST=tcp://docker-dind:2376
+      - DOCKER_TLS_CERTDIR=/certs
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
+      - CGO_ENABLED=0
+    volumes:
+      - ../..:/app:ro
+      - docker-certs-client:/certs/client:ro
+      - /tmp:/tmp
+    depends_on:
+      - docker-dind
+    command: |
+      sh -c "
+        # Install required tools
+        apk add --no-cache git make curl &&
+        
+        # Wait for Docker daemon to be ready
+        until docker info > /dev/null 2>&1; do
+          echo 'Waiting for Docker daemon...'
+          sleep 1
+        done &&
+        
+        echo 'Docker daemon ready!' &&
+        
+        # Run integration tests
+        go mod download &&
+        go test -v -timeout 10m ./test/integration/... -coverprofile=integration_coverage.out
+      "
+    networks:
+      - ci-network
+
+networks:
+  ci-network:
+    driver: bridge
+
+volumes:
+  docker-certs-ca:
+  docker-certs-client:
+
+# Alternative configurations for different CI/CD platforms:
+
+# GitHub Actions workflow snippet:
+# ---
+# name: Integration Tests
+# on: [push, pull_request]
+# jobs:
+#   integration:
+#     runs-on: ubuntu-latest
+#     services:
+#       docker:
+#         image: docker:dind
+#         options: --privileged
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-go@v4
+#         with:
+#           go-version: '1.23'
+#       - name: Run Integration Tests
+#         run: |
+#           make test-integration
+#         env:
+#           DOCKER_HOST: tcp://localhost:2376
+
+# GitLab CI snippet:
+# ---
+# integration_tests:
+#   stage: test
+#   image: golang:1.23
+#   services:
+#     - docker:dind
+#   variables:
+#     DOCKER_HOST: tcp://docker:2376
+#     DOCKER_TLS_CERTDIR: ""
+#   before_script:
+#     - until docker info > /dev/null 2>&1; do sleep 1; done
+#   script:
+#     - go test -v ./test/integration/...
+
+# Jenkins Dockerfile for CI:
+# ---
+# FROM golang:1.23
+# RUN apt-get update && apt-get install -y docker.io
+# COPY . /workspace
+# WORKDIR /workspace
+# CMD ["go", "test", "-v", "./test/integration/..."]

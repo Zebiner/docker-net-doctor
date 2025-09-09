@@ -1,0 +1,34 @@
+{
+  "config": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.1.4",
+    "db": "https://vuln.go.dev",
+    "db_last_modified": "2025-09-08T14:13:10Z",
+    "go_version": "go1.24.7",
+    "scan_level": "symbol",
+    "scan_mode": "source"
+  }
+}
+govulncheck: loading packages: 
+There are errors with the provided package patterns:
+
+/home/mcquak/projs/go/docker-net-doctor/cmd/docker-net-doctor/main.go:432:60: undefined: outputFormat
+/home/mcquak/projs/go/docker-net-doctor/cmd/docker-net-doctor/main.go:502:12: undefined: verbose
+/home/mcquak/projs/go/docker-net-doctor/cmd/docker-net-doctor/main.go:509:12: undefined: verbose
+/home/mcquak/projs/go/docker-net-doctor/cmd/docker-net-doctor/main.go:49:5: "io" imported and not used
+/home/mcquak/projs/go/docker-net-doctor/cmd/docs-server/main.go:238:17: undefined: docs
+/home/mcquak/projs/go/docker-net-doctor/cmd/docs-server/main.go:24:2: "encoding/json" imported and not used
+/home/mcquak/projs/go/docker-net-doctor/cmd/docs-server/main.go:32:2: "strings" imported and not used
+/home/mcquak/projs/go/docker-net-doctor/cmd/docs-server/main.go:34:2: "github.com/zebiner/docker-net-doctor/docs/swagger" imported and not used
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:238:66: undefined: types.NetworkResource
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:159:38: undefined: network.IPAM
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:161:22: undefined: network.IPAMConfig
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:219:51: cannot use port (variable of type string) as nat.Port value in argument to container.MappedPort
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:239:57: undefined: types.NetworkListOptions
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:248:61: undefined: types.ContainerListOptions
+/home/mcquak/projs/go/docker-net-doctor/test/integration/test_scenarios.go:8:2: "strconv" imported and not used
+/home/mcquak/projs/go/docker-net-doctor/test/integration/testcontainers_helper.go:13:2: "github.com/stretchr/testify/require" imported and not used
+
+For details on package patterns, see https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns.
+

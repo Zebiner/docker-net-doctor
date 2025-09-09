@@ -1,0 +1,13 @@
+# .trivyignore - Trivy Docker security scanner ignore file
+
+# Ignore low-severity CVEs that are not applicable
+# Format: CVE-YYYY-NNNN
+
+# Alpine base image CVEs that don't affect our use case
+# (Add specific CVE numbers here as needed)
+
+# Development dependencies that are not in production
+# Example: CVE-2023-12345
+
+# CVEs in test dependencies that don't affect runtime
+# Example: CVE-2023-67890
