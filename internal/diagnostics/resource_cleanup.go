@@ -28,7 +28,7 @@
 //       AutoCleanup: true,
 //       Timeout: 30 * time.Second,
 //   })
-//   
+//
 //   err := cleanup.CleanupAfterError(ctx, diagError)
 
 package diagnostics
@@ -56,20 +56,20 @@ import (
 type ResourceCleanupManager struct {
 	client *docker.Client
 	config *CleanupConfig
-	
+
 	// Resource tracking
 	trackedContainers map[string]*TrackedResource
 	trackedNetworks   map[string]*TrackedResource
 	trackedVolumes    map[string]*TrackedResource
-	
+
 	// Cleanup state
 	cleanupHistory []CleanupOperation
 	metrics        *CleanupMetrics
-	
+
 	// Control
-	stopCh   chan struct{}
-	stopped  bool
-	
+	stopCh  chan struct{}
+	stopped bool
+
 	// Thread safety
 	mu sync.RWMutex
 }
@@ -77,45 +77,45 @@ type ResourceCleanupManager struct {
 // CleanupConfig defines the behavior and policies for resource cleanup operations
 type CleanupConfig struct {
 	// Basic configuration
-	Timeout         time.Duration // Maximum time for cleanup operations
-	AutoCleanup     bool          // Enable automatic cleanup during error recovery
-	DryRun          bool          // Test mode - log actions without executing
-	
+	Timeout     time.Duration // Maximum time for cleanup operations
+	AutoCleanup bool          // Enable automatic cleanup during error recovery
+	DryRun      bool          // Test mode - log actions without executing
+
 	// Resource policies
-	PreserveDebugData   bool          // Keep resources for debugging
-	CleanupRetention    time.Duration // How long to keep cleanup history
-	ResourceMaxAge      time.Duration // Maximum age for diagnostic resources
-	
+	PreserveDebugData bool          // Keep resources for debugging
+	CleanupRetention  time.Duration // How long to keep cleanup history
+	ResourceMaxAge    time.Duration // Maximum age for diagnostic resources
+
 	// Safety settings
-	RequireConfirmation bool          // Require explicit confirmation for cleanup
-	AllowForceCleanup   bool          // Allow forced cleanup of protected resources
-	BackupBeforeCleanup bool          // Backup resource configurations
-	
+	RequireConfirmation bool // Require explicit confirmation for cleanup
+	AllowForceCleanup   bool // Allow forced cleanup of protected resources
+	BackupBeforeCleanup bool // Backup resource configurations
+
 	// Performance settings
-	MaxConcurrentCleanups int         // Maximum parallel cleanup operations
-	CleanupBatchSize      int         // Number of resources to process in batch
-	
+	MaxConcurrentCleanups int // Maximum parallel cleanup operations
+	CleanupBatchSize      int // Number of resources to process in batch
+
 	// Scheduling
-	EnablePeriodicCleanup bool          // Enable scheduled cleanup
+	EnablePeriodicCleanup   bool          // Enable scheduled cleanup
 	PeriodicCleanupInterval time.Duration // Interval for periodic cleanup
 }
 
 // TrackedResource represents a Docker resource being tracked for cleanup
 type TrackedResource struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Type        ResourceType      `json:"type"`
-	CreatedAt   time.Time         `json:"created_at"`
-	LastUsed    time.Time         `json:"last_used"`
-	Tags        map[string]string `json:"tags"`
-	Protected   bool              `json:"protected"`   // Prevent accidental cleanup
-	Diagnostic  bool              `json:"diagnostic"`  // Created by diagnostic operations
-	Temporary   bool              `json:"temporary"`   // Temporary resource for cleanup
-	
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Type       ResourceType      `json:"type"`
+	CreatedAt  time.Time         `json:"created_at"`
+	LastUsed   time.Time         `json:"last_used"`
+	Tags       map[string]string `json:"tags"`
+	Protected  bool              `json:"protected"`  // Prevent accidental cleanup
+	Diagnostic bool              `json:"diagnostic"` // Created by diagnostic operations
+	Temporary  bool              `json:"temporary"`  // Temporary resource for cleanup
+
 	// Metadata
-	CreatedBy   string            `json:"created_by"`   // Which diagnostic operation created this
-	DependsOn   []string          `json:"depends_on"`   // Other resources this depends on
-	DependedBy  []string          `json:"depended_by"`  // Resources that depend on this
+	CreatedBy  string   `json:"created_by"`  // Which diagnostic operation created this
+	DependsOn  []string `json:"depends_on"`  // Other resources this depends on
+	DependedBy []string `json:"depended_by"` // Resources that depend on this
 }
 
 // ResourceType categorizes different types of Docker resources for cleanup
@@ -152,16 +152,16 @@ func (rt ResourceType) String() string {
 
 // CleanupOperation represents a single cleanup operation with its results
 type CleanupOperation struct {
-	ID            string                    `json:"id"`
-	StartTime     time.Time                 `json:"start_time"`
-	EndTime       time.Time                 `json:"end_time"`
-	Duration      time.Duration             `json:"duration"`
-	Trigger       CleanupTrigger            `json:"trigger"`
-	Resources     []*TrackedResource        `json:"resources"`
-	Results       []ResourceCleanupResult   `json:"results"`
-	Success       bool                      `json:"success"`
-	Error         string                    `json:"error,omitempty"`
-	DryRun        bool                      `json:"dry_run"`
+	ID        string                  `json:"id"`
+	StartTime time.Time               `json:"start_time"`
+	EndTime   time.Time               `json:"end_time"`
+	Duration  time.Duration           `json:"duration"`
+	Trigger   CleanupTrigger          `json:"trigger"`
+	Resources []*TrackedResource      `json:"resources"`
+	Results   []ResourceCleanupResult `json:"results"`
+	Success   bool                    `json:"success"`
+	Error     string                  `json:"error,omitempty"`
+	DryRun    bool                    `json:"dry_run"`
 }
 
 // CleanupTrigger indicates what triggered a cleanup operation
@@ -195,12 +195,12 @@ func (ct CleanupTrigger) String() string {
 
 // ResourceCleanupResult contains the outcome of cleaning up a single resource
 type ResourceCleanupResult struct {
-	Resource    *TrackedResource `json:"resource"`
-	Success     bool             `json:"success"`
-	Error       string           `json:"error,omitempty"`
-	Action      CleanupAction    `json:"action"`
-	TimeTaken   time.Duration    `json:"time_taken"`
-	SizeFreed   int64           `json:"size_freed,omitempty"`
+	Resource  *TrackedResource `json:"resource"`
+	Success   bool             `json:"success"`
+	Error     string           `json:"error,omitempty"`
+	Action    CleanupAction    `json:"action"`
+	TimeTaken time.Duration    `json:"time_taken"`
+	SizeFreed int64            `json:"size_freed,omitempty"`
 }
 
 // CleanupAction describes what action was taken on a resource
@@ -235,29 +235,29 @@ func (ca CleanupAction) String() string {
 // CleanupMetrics tracks cleanup system performance and resource usage
 type CleanupMetrics struct {
 	// Operation counts
-	TotalCleanups        int64 `json:"total_cleanups"`
-	SuccessfulCleanups   int64 `json:"successful_cleanups"`
-	FailedCleanups       int64 `json:"failed_cleanups"`
-	
+	TotalCleanups      int64 `json:"total_cleanups"`
+	SuccessfulCleanups int64 `json:"successful_cleanups"`
+	FailedCleanups     int64 `json:"failed_cleanups"`
+
 	// Resource counts
-	ResourcesTracked     int64 `json:"resources_tracked"`
-	ResourcesCleanedUp   int64 `json:"resources_cleaned_up"`
-	ResourcesSkipped     int64 `json:"resources_skipped"`
-	
+	ResourcesTracked   int64 `json:"resources_tracked"`
+	ResourcesCleanedUp int64 `json:"resources_cleaned_up"`
+	ResourcesSkipped   int64 `json:"resources_skipped"`
+
 	// Performance metrics
-	TotalCleanupTime     time.Duration `json:"total_cleanup_time"`
-	AverageCleanupTime   time.Duration `json:"average_cleanup_time"`
-	MaxCleanupTime       time.Duration `json:"max_cleanup_time"`
-	
+	TotalCleanupTime   time.Duration `json:"total_cleanup_time"`
+	AverageCleanupTime time.Duration `json:"average_cleanup_time"`
+	MaxCleanupTime     time.Duration `json:"max_cleanup_time"`
+
 	// Resource metrics by type
-	CleanupsByType       map[ResourceType]int64 `json:"cleanups_by_type"`
-	
+	CleanupsByType map[ResourceType]int64 `json:"cleanups_by_type"`
+
 	// Efficiency metrics
-	StorageFreed         int64   `json:"storage_freed"`
-	CleanupEfficiency    float64 `json:"cleanup_efficiency"`
-	
+	StorageFreed      int64   `json:"storage_freed"`
+	CleanupEfficiency float64 `json:"cleanup_efficiency"`
+
 	// Health indicators
-	IsHealthy            bool    `json:"is_healthy"`
+	IsHealthy             bool      `json:"is_healthy"`
 	LastSuccessfulCleanup time.Time `json:"last_successful_cleanup"`
 }
 
@@ -345,7 +345,7 @@ func (rcm *ResourceCleanupManager) CleanupAfterError(ctx context.Context, diagEr
 
 	// Determine cleanup strategy based on error type
 	strategy := rcm.selectCleanupStrategy(diagError)
-	
+
 	// Execute cleanup operation
 	operation := &CleanupOperation{
 		ID:        fmt.Sprintf("error-recovery-%d", time.Now().Unix()),
@@ -360,7 +360,7 @@ func (rcm *ResourceCleanupManager) CleanupAfterError(ctx context.Context, diagEr
 
 	// Perform cleanup
 	results, err := rcm.executeCleanup(cleanupCtx, resourcesToClean, strategy)
-	
+
 	// Complete operation record
 	operation.EndTime = time.Now()
 	operation.Duration = operation.EndTime.Sub(operation.StartTime)
@@ -395,12 +395,12 @@ func (rcm *ResourceCleanupManager) PerformCleanup(ctx context.Context) error {
 		CleanupExpired:     true,
 		PreserveDiagnostic: rcm.config.PreserveDebugData,
 	}
-	
+
 	resourcesToClean := rcm.getResourcesForCleanup(strategy)
 	operation.Resources = resourcesToClean
 
 	results, err := rcm.executeCleanup(cleanupCtx, resourcesToClean, strategy)
-	
+
 	operation.EndTime = time.Now()
 	operation.Duration = operation.EndTime.Sub(operation.StartTime)
 	operation.Results = results
@@ -430,16 +430,16 @@ func (rcm *ResourceCleanupManager) PerformAggressiveCleanup(ctx context.Context)
 		CleanupTemporary:   true,
 		CleanupOrphaned:    true,
 		CleanupExpired:     true,
-		CleanupRunning:     true, // Stop running diagnostic containers
-		IgnoreProtected:    true, // Override protection
+		CleanupRunning:     true,  // Stop running diagnostic containers
+		IgnoreProtected:    true,  // Override protection
 		PreserveDiagnostic: false, // Clean even diagnostic resources
 	}
-	
+
 	resourcesToClean := rcm.getAllTrackedResources()
 	operation.Resources = resourcesToClean
 
 	results, err := rcm.executeCleanup(cleanupCtx, resourcesToClean, strategy)
-	
+
 	operation.EndTime = time.Now()
 	operation.Duration = operation.EndTime.Sub(operation.StartTime)
 	operation.Results = results
@@ -471,12 +471,12 @@ func (rcm *ResourceCleanupManager) PerformFinalCleanup(ctx context.Context) erro
 		CleanupRunning:     true,
 		PreserveDiagnostic: rcm.config.PreserveDebugData,
 	}
-	
+
 	resourcesToClean := rcm.getTemporaryResources()
 	operation.Resources = resourcesToClean
 
 	results, err := rcm.executeCleanup(cleanupCtx, resourcesToClean, strategy)
-	
+
 	operation.EndTime = time.Now()
 	operation.Duration = operation.EndTime.Sub(operation.StartTime)
 	operation.Results = results
@@ -513,14 +513,14 @@ func (rcm *ResourceCleanupManager) GetMetrics() CleanupMetrics {
 
 	// Update calculated metrics
 	metrics := *rcm.metrics
-	
+
 	if metrics.TotalCleanups > 0 {
 		metrics.AverageCleanupTime = metrics.TotalCleanupTime / time.Duration(metrics.TotalCleanups)
 		metrics.CleanupEfficiency = float64(metrics.SuccessfulCleanups) / float64(metrics.TotalCleanups)
 	}
-	
+
 	metrics.IsHealthy = rcm.isHealthyInternal()
-	
+
 	return metrics
 }
 
@@ -528,9 +528,9 @@ func (rcm *ResourceCleanupManager) GetMetrics() CleanupMetrics {
 
 func (rcm *ResourceCleanupManager) selectCleanupStrategy(diagError *DiagnosticError) *CleanupStrategy {
 	strategy := &CleanupStrategy{
-		CleanupTemporary: true,
-		CleanupOrphaned:  false,
-		CleanupExpired:   false,
+		CleanupTemporary:   true,
+		CleanupOrphaned:    false,
+		CleanupExpired:     false,
 		PreserveDiagnostic: rcm.config.PreserveDebugData,
 	}
 
@@ -543,16 +543,16 @@ func (rcm *ResourceCleanupManager) selectCleanupStrategy(diagError *DiagnosticEr
 		if diagError.Code == ErrCodeResourceExhaustion {
 			strategy.CleanupRunning = true
 		}
-		
+
 	case ErrTypeConnection:
 		// Connection errors might need container cleanup
 		strategy.CleanupOrphaned = true
-		
+
 	case ErrTypeNetwork:
 		// Network errors might need network cleanup
 		strategy.CleanupOrphaned = true
 		strategy.CleanupExpired = true
-		
+
 	default:
 		// Default strategy for other error types
 		strategy.CleanupExpired = true
@@ -580,7 +580,7 @@ func (rcm *ResourceCleanupManager) getResourcesForCleanup(strategy *CleanupStrat
 
 	// Check all tracked resources
 	allResources := append([]*TrackedResource{}, rcm.getAllTrackedResourcesInternal()...)
-	
+
 	for _, resource := range allResources {
 		shouldClean := false
 
@@ -588,14 +588,14 @@ func (rcm *ResourceCleanupManager) getResourcesForCleanup(strategy *CleanupStrat
 		if strategy.CleanupTemporary && resource.Temporary {
 			shouldClean = true
 		}
-		
+
 		if strategy.CleanupExpired && rcm.config.ResourceMaxAge > 0 {
 			age := now.Sub(resource.CreatedAt)
 			if age > rcm.config.ResourceMaxAge {
 				shouldClean = true
 			}
 		}
-		
+
 		if strategy.CleanupOrphaned && rcm.isOrphanedResource(resource) {
 			shouldClean = true
 		}
@@ -604,7 +604,7 @@ func (rcm *ResourceCleanupManager) getResourcesForCleanup(strategy *CleanupStrat
 		if resource.Protected && !strategy.IgnoreProtected {
 			shouldClean = false
 		}
-		
+
 		if resource.Diagnostic && strategy.PreserveDiagnostic {
 			shouldClean = false
 		}
@@ -638,7 +638,7 @@ func (rcm *ResourceCleanupManager) executeCleanup(ctx context.Context, resources
 		batchResults, batchErrors := rcm.processBatch(ctx, batch, strategy)
 		results = append(results, batchResults...)
 		cleanupErrors = append(cleanupErrors, batchErrors...)
-		
+
 		// Check context cancellation between batches
 		select {
 		case <-ctx.Done():
@@ -677,7 +677,7 @@ func (rcm *ResourceCleanupManager) processBatch(ctx context.Context, resources [
 		wg.Add(1)
 		go func(res *TrackedResource) {
 			defer wg.Done()
-			
+
 			// Acquire semaphore
 			sem <- struct{}{}
 			defer func() { <-sem }()
@@ -685,7 +685,7 @@ func (rcm *ResourceCleanupManager) processBatch(ctx context.Context, resources [
 			// Cleanup individual resource
 			result := rcm.cleanupResource(ctx, res, strategy)
 			resultsCh <- result
-			
+
 			if !result.Success && result.Error != "" {
 				errorsCh <- fmt.Errorf("failed to cleanup %s %s: %s", res.Type, res.ID, result.Error)
 			}
@@ -701,7 +701,7 @@ func (rcm *ResourceCleanupManager) processBatch(ctx context.Context, resources [
 	for result := range resultsCh {
 		results = append(results, result)
 	}
-	
+
 	for err := range errorsCh {
 		errors = append(errors, err)
 	}
@@ -750,7 +750,7 @@ func (rcm *ResourceCleanupManager) cleanupResource(ctx context.Context, resource
 			result.Success = true
 			result.Action = ActionRemoved
 		}
-		
+
 	case ResourceTypeNetwork:
 		err := rcm.cleanupNetwork(ctx, resource)
 		if err != nil {
@@ -761,7 +761,7 @@ func (rcm *ResourceCleanupManager) cleanupResource(ctx context.Context, resource
 			result.Success = true
 			result.Action = ActionRemoved
 		}
-		
+
 	case ResourceTypeVolume:
 		err := rcm.cleanupVolume(ctx, resource)
 		if err != nil {
@@ -772,7 +772,7 @@ func (rcm *ResourceCleanupManager) cleanupResource(ctx context.Context, resource
 			result.Success = true
 			result.Action = ActionRemoved
 		}
-		
+
 	default:
 		result.Success = false
 		result.Error = "unsupported resource type"
@@ -833,7 +833,7 @@ func (rcm *ResourceCleanupManager) getAllTrackedResources() []*TrackedResource {
 
 func (rcm *ResourceCleanupManager) getAllTrackedResourcesInternal() []*TrackedResource {
 	var resources []*TrackedResource
-	
+
 	for _, resource := range rcm.trackedContainers {
 		resources = append(resources, resource)
 	}
@@ -843,19 +843,19 @@ func (rcm *ResourceCleanupManager) getAllTrackedResourcesInternal() []*TrackedRe
 	for _, resource := range rcm.trackedVolumes {
 		resources = append(resources, resource)
 	}
-	
+
 	return resources
 }
 
 func (rcm *ResourceCleanupManager) getTemporaryResources() []*TrackedResource {
 	var resources []*TrackedResource
-	
+
 	for _, resource := range rcm.getAllTrackedResources() {
 		if resource.Temporary {
 			resources = append(resources, resource)
 		}
 	}
-	
+
 	return resources
 }
 
@@ -864,14 +864,14 @@ func (rcm *ResourceCleanupManager) isOrphanedResource(resource *TrackedResource)
 	if time.Since(resource.LastUsed) > rcm.config.ResourceMaxAge {
 		return true
 	}
-	
+
 	// Check if dependencies still exist
 	for _, depID := range resource.DependsOn {
 		if !rcm.resourceExists(depID) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -898,9 +898,9 @@ func (rcm *ResourceCleanupManager) backupResource(ctx context.Context, resource 
 func (rcm *ResourceCleanupManager) recordCleanupOperation(operation *CleanupOperation) {
 	rcm.mu.Lock()
 	defer rcm.mu.Unlock()
-	
+
 	rcm.cleanupHistory = append(rcm.cleanupHistory, *operation)
-	
+
 	// Limit history size based on retention policy
 	maxHistory := 100
 	if len(rcm.cleanupHistory) > maxHistory {
@@ -911,9 +911,9 @@ func (rcm *ResourceCleanupManager) recordCleanupOperation(operation *CleanupOper
 func (rcm *ResourceCleanupManager) updateCleanupMetrics(results []ResourceCleanupResult) {
 	rcm.mu.Lock()
 	defer rcm.mu.Unlock()
-	
+
 	rcm.metrics.TotalCleanups++
-	
+
 	successCount := 0
 	for _, result := range results {
 		if result.Success {
@@ -925,7 +925,7 @@ func (rcm *ResourceCleanupManager) updateCleanupMetrics(results []ResourceCleanu
 			rcm.metrics.ResourcesSkipped++
 		}
 	}
-	
+
 	if successCount == len(results) {
 		rcm.metrics.SuccessfulCleanups++
 		rcm.metrics.LastSuccessfulCleanup = time.Now()
@@ -938,13 +938,13 @@ func (rcm *ResourceCleanupManager) isHealthyInternal() bool {
 	if rcm.metrics.TotalCleanups == 0 {
 		return true // No operations yet
 	}
-	
+
 	// Check success rate
 	successRate := float64(rcm.metrics.SuccessfulCleanups) / float64(rcm.metrics.TotalCleanups)
 	if successRate < 0.7 { // Less than 70% success rate is concerning
 		return false
 	}
-	
+
 	// Check if last cleanup was recent (if periodic cleanup is enabled)
 	if rcm.config.EnablePeriodicCleanup {
 		timeSinceLastCleanup := time.Since(rcm.metrics.LastSuccessfulCleanup)
@@ -952,25 +952,25 @@ func (rcm *ResourceCleanupManager) isHealthyInternal() bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 func (rcm *ResourceCleanupManager) periodicCleanupLoop() {
 	ticker := time.NewTicker(rcm.config.PeriodicCleanupInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
 			ctx, cancel := context.WithTimeout(context.Background(), rcm.config.Timeout)
 			err := rcm.PerformCleanup(ctx)
 			cancel()
-			
+
 			if err != nil {
 				// Log error but continue periodic cleanup
 			}
-			
+
 		case <-rcm.stopCh:
 			return
 		}

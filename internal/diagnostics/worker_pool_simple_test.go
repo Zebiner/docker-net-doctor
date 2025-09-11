@@ -44,14 +44,14 @@ func TestSimpleWorkerPool(t *testing.T) {
 	// Submit a simple job
 	check := &SimpleCheck{name: "test1"}
 	fmt.Printf("Submitting check: %s\n", check.Name())
-	
+
 	if err := pool.Submit(check, nil); err != nil {
 		t.Fatalf("Failed to submit job: %v", err)
 	}
 
 	// Try to collect result
 	resultsChan := pool.GetResults()
-	
+
 	select {
 	case result := <-resultsChan:
 		fmt.Printf("Got result: %+v\n", result)

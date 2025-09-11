@@ -38,6 +38,23 @@ import (
 	"github.com/docker/docker/client"
 )
 
+// ClientInterface defines the interface that diagnostic checks use.
+// This allows for mocking in tests while maintaining the same API.
+type ClientInterface interface {
+	// Core Docker operations
+	Ping(ctx context.Context) error
+	Close() error
+	
+	// Container operations
+	ListContainers(ctx context.Context) ([]types.Container, error)
+	ExecInContainer(ctx context.Context, containerID string, cmd []string) (string, error)
+	GetContainerNetworkConfig(containerID string) (*ContainerNetworkInfo, error)
+	InspectContainer(containerID string) (types.ContainerJSON, error)
+	
+	// Network operations
+	GetNetworkInfo() ([]NetworkDiagnostic, error)
+}
+
 // Client wraps the Docker client with diagnostic-specific methods.
 // This is the legacy client maintained for backward compatibility while providing
 // a seamless upgrade path to the enhanced client with advanced features.
@@ -196,6 +213,11 @@ func (c *Client) ListContainers(ctx context.Context) ([]types.Container, error) 
 		return c.enhanced.ListContainers(ctx)
 	}
 	
+	// Defensive nil check
+	if c.docker == nil {
+		return nil, fmt.Errorf("docker client not initialized")
+	}
+	
 	// Fall back to standard implementation
 	containers, err := c.docker.ContainerList(ctx, container.ListOptions{
 		All: false, // Only running containers
@@ -224,6 +246,11 @@ func (c *Client) GetNetworkInfo() ([]NetworkDiagnostic, error) {
 	// Use enhanced client if available
 	if c.enhanced != nil {
 		return c.enhanced.GetNetworkInfo()
+	}
+	
+	// Defensive nil check
+	if c.docker == nil {
+		return nil, fmt.Errorf("docker client not initialized")
 	}
 	
 	// Fall back to standard implementation
@@ -294,6 +321,11 @@ func (c *Client) GetContainerNetworkConfig(containerID string) (*ContainerNetwor
 		return c.enhanced.GetContainerNetworkConfig(containerID)
 	}
 	
+	// Defensive nil check
+	if c.docker == nil {
+		return nil, fmt.Errorf("docker client not initialized")
+	}
+	
 	// Fall back to standard implementation
 	container, err := c.docker.ContainerInspect(c.ctx, containerID)
 	if err != nil {
@@ -351,6 +383,11 @@ func (c *Client) ExecInContainer(ctx context.Context, containerID string, cmd []
 		return c.enhanced.ExecInContainer(ctx, containerID, cmd)
 	}
 	
+	// Defensive nil check
+	if c.docker == nil {
+		return "", fmt.Errorf("docker client not initialized")
+	}
+	
 	// Fall back to standard implementation
 	execConfig := container.ExecOptions{
 		AttachStdout: true,
@@ -396,6 +433,11 @@ func (c *Client) Ping(ctx context.Context) error {
 		return c.enhanced.Ping(ctx)
 	}
 	
+	// Defensive nil check
+	if c.docker == nil {
+		return fmt.Errorf("docker client not initialized")
+	}
+	
 	// Fall back to standard implementation
 	_, err := c.docker.Ping(ctx)
 	return err
@@ -422,6 +464,11 @@ func (c *Client) InspectContainer(containerID string) (types.ContainerJSON, erro
 	// Use enhanced client if available
 	if c.enhanced != nil {
 		return c.enhanced.InspectContainer(containerID)
+	}
+	
+	// Defensive nil check
+	if c.docker == nil {
+		return types.ContainerJSON{}, fmt.Errorf("docker client not initialized")
 	}
 	
 	// Fall back to standard implementation

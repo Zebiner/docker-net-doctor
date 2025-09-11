@@ -81,13 +81,13 @@ func createMockDockerClient(
 // TestContainerConnectivityCheck covers various container connectivity scenarios
 func TestContainerConnectivityCheck(t *testing.T) {
 	testCases := []struct {
-		name               string
-		containers         []types.Container
-		containerNetworks  map[string]*docker.ContainerNetworkInfo
-		execResults        map[string]string
-		expectedSuccess    bool
-		expectedTestCount  int
-		expectedFailCount  int
+		name              string
+		containers        []types.Container
+		containerNetworks map[string]*docker.ContainerNetworkInfo
+		execResults       map[string]string
+		expectedSuccess   bool
+		expectedTestCount int
+		expectedFailCount int
 	}{
 		{
 			name: "Successful Connectivity",
@@ -207,7 +207,7 @@ func TestContainerConnectivityCheck(t *testing.T) {
 			// We'll simulate the check by calling our mock client directly
 			containers, err := mockClient.ListContainers(ctx)
 			assert.NoError(t, err)
-			
+
 			// Simulate the connectivity check logic
 			if len(containers) < 2 {
 				// Not enough containers - should pass with no tests
@@ -215,10 +215,10 @@ func TestContainerConnectivityCheck(t *testing.T) {
 				assert.Equal(t, tc.expectedFailCount, 0)
 				return
 			}
-			
+
 			// For the purpose of this test, we'll validate the mock setup works
 			assert.Equal(t, len(tc.containers), len(containers))
-			
+
 			// Test network config retrieval
 			if len(containers) > 0 {
 				netConfig, err := mockClient.GetContainerNetworkConfig(containers[0].ID)
@@ -227,7 +227,7 @@ func TestContainerConnectivityCheck(t *testing.T) {
 					assert.NotNil(t, netConfig)
 				}
 			}
-			
+
 			// Test command execution
 			if len(tc.execResults) > 0 && len(containers) > 0 {
 				for key := range tc.execResults {
@@ -261,10 +261,10 @@ func TestPortBindingCheck(t *testing.T) {
 					Names: []string{"container1"},
 					Ports: []types.Port{
 						{
-							IP:         "0.0.0.0",
+							IP:          "0.0.0.0",
 							PrivatePort: 80,
 							PublicPort:  8080,
-							Type:       "tcp",
+							Type:        "tcp",
 						},
 					},
 				},
@@ -281,10 +281,10 @@ func TestPortBindingCheck(t *testing.T) {
 					Names: []string{"container1"},
 					Ports: []types.Port{
 						{
-							IP:         "0.0.0.0",
+							IP:          "0.0.0.0",
 							PrivatePort: 80,
 							PublicPort:  8080,
-							Type:       "tcp",
+							Type:        "tcp",
 						},
 					},
 				},
@@ -293,10 +293,10 @@ func TestPortBindingCheck(t *testing.T) {
 					Names: []string{"container2"},
 					Ports: []types.Port{
 						{
-							IP:         "0.0.0.0",
+							IP:          "0.0.0.0",
 							PrivatePort: 81,
 							PublicPort:  8080,
-							Type:       "tcp",
+							Type:        "tcp",
 						},
 					},
 				},
@@ -313,10 +313,10 @@ func TestPortBindingCheck(t *testing.T) {
 					Names: []string{"container1"},
 					Ports: []types.Port{
 						{
-							IP:         "0.0.0.0",
+							IP:          "0.0.0.0",
 							PrivatePort: 80,
 							PublicPort:  8080,
-							Type:       "tcp",
+							Type:        "tcp",
 						},
 					},
 				},

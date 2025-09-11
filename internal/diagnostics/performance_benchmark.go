@@ -40,7 +40,7 @@ func PrecisionBenchmark(b *testing.B) {
 			b.Run(fmt.Sprintf("Parallel_%d_Workers", workerCount), func(b *testing.B) {
 				b.ResetTimer()
 				parallelStart := time.Now()
-				
+
 				// Simulate parallel work
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()

@@ -41,25 +41,25 @@ type DiagnosticError struct {
 	Type     ErrorType `json:"type"`
 	Message  string    `json:"message"`
 	Original error     `json:"-"` // Original error (not serialized)
-	
+
 	// Classification and priority
 	Severity ErrorSeverity `json:"severity"`
 	Category string        `json:"category,omitempty"`
-	
+
 	// Context and debugging information
 	Context   map[string]interface{} `json:"context,omitempty"`
 	Timestamp time.Time              `json:"timestamp"`
 	Source    string                 `json:"source,omitempty"` // Source component/check
-	
+
 	// Recovery information
 	Recovery          *RecoveryStrategy `json:"recovery,omitempty"`
 	RecoveryAttempted bool              `json:"recovery_attempted"`
 	RecoveryError     string            `json:"recovery_error,omitempty"`
-	
+
 	// Additional metadata
-	Tags       []string               `json:"tags,omitempty"`
-	UserAction string                 `json:"user_action,omitempty"`
-	Reference  string                 `json:"reference,omitempty"` // Documentation reference
+	Tags       []string `json:"tags,omitempty"`
+	UserAction string   `json:"user_action,omitempty"`
+	Reference  string   `json:"reference,omitempty"` // Documentation reference
 }
 
 // ErrorCode provides specific error identification for programmatic handling
@@ -70,14 +70,14 @@ const (
 	ErrCodeGeneric ErrorCode = iota
 	ErrCodeUnknown
 	ErrCodeInternal
-	
+
 	// Connection errors (1000-1099)
 	ErrCodeDockerDaemonUnreachable = 1000 + iota - 3
 	ErrCodeDockerAPIVersionMismatch
 	ErrCodeDockerPermissionDenied
 	ErrCodeDockerSocketNotFound
 	ErrCodeDockerDaemonNotRunning
-	
+
 	// Resource errors (1100-1199)
 	ErrCodeResourceExhaustion = 1100 + iota - 8
 	ErrCodeOutOfMemory
@@ -85,7 +85,7 @@ const (
 	ErrCodeTooManyOpenFiles
 	ErrCodeResourceConflict
 	ErrCodeContainerLimitReached
-	
+
 	// Network errors (1200-1299)
 	ErrCodeNetworkConfiguration = 1200 + iota - 14
 	ErrCodeNetworkNotFound
@@ -97,20 +97,20 @@ const (
 	ErrCodeIPForwardingDisabled
 	ErrCodeIptablesConfigError
 	ErrCodeMTUMismatch
-	
+
 	// System errors (1300-1399)
 	ErrCodeSystemConfiguration = 1300 + iota - 24
 	ErrCodePermissionError
 	ErrCodeServiceNotRunning
 	ErrCodeConfigurationMissing
 	ErrCodeDependencyMissing
-	
+
 	// Context errors (1400-1499)
 	ErrCodeTimeout = 1400 + iota - 29
 	ErrCodeCancelled
 	ErrCodeDeadlineExceeded
 	ErrCodeContextExpired
-	
+
 	// Circuit breaker errors (1500-1599)
 	ErrCodeCircuitBreakerOpen = 1500 + iota - 33
 	ErrCodeTooManyFailures
@@ -143,17 +143,17 @@ type RecoveryStrategy struct {
 	RetryWithBackoff  bool    `json:"retry_with_backoff"`
 	BackoffMultiplier float64 `json:"backoff_multiplier,omitempty"`
 	MaxRetries        int     `json:"max_retries,omitempty"`
-	
+
 	// Recovery actions
 	CleanupResources bool `json:"cleanup_resources"`
 	GracefulDegrade  bool `json:"graceful_degrade"`
 	NetworkRecovery  bool `json:"network_recovery"`
-	
+
 	// User guidance
 	Immediate []string `json:"immediate,omitempty"` // Immediate actions to try
 	LongTerm  []string `json:"long_term,omitempty"` // Long-term preventive actions
 	Commands  []string `json:"commands,omitempty"`  // Specific commands to run
-	
+
 	// Automation
 	AutoRecovery bool `json:"auto_recovery"` // Can be recovered automatically
 	RequiresUser bool `json:"requires_user"` // Requires user intervention
@@ -167,26 +167,26 @@ type RecoveryMetrics struct {
 	TotalFailures        int64 `json:"total_failures"`
 	SuccessfulRecoveries int64 `json:"successful_recoveries"`
 	FailedRecoveries     int64 `json:"failed_recoveries"`
-	
+
 	// Timing metrics
-	TotalExecutionTime time.Duration `json:"total_execution_time"`
+	TotalExecutionTime   time.Duration `json:"total_execution_time"`
 	AverageExecutionTime time.Duration `json:"average_execution_time"`
-	MaxExecutionTime   time.Duration `json:"max_execution_time"`
-	
+	MaxExecutionTime     time.Duration `json:"max_execution_time"`
+
 	// Error distribution
-	ErrorsByType       map[ErrorType]int64 `json:"errors_by_type"`
-	ErrorsByCode       map[ErrorCode]int64 `json:"errors_by_code"`
-	ErrorsBySeverity   map[ErrorSeverity]int64 `json:"errors_by_severity"`
-	
+	ErrorsByType     map[ErrorType]int64     `json:"errors_by_type"`
+	ErrorsByCode     map[ErrorCode]int64     `json:"errors_by_code"`
+	ErrorsBySeverity map[ErrorSeverity]int64 `json:"errors_by_severity"`
+
 	// Circuit breaker metrics
 	CircuitBreakerState    CircuitState `json:"circuit_breaker_state"`
 	CircuitBreakerFailures int          `json:"circuit_breaker_failures"`
 	CircuitBreakerBlocks   int64        `json:"circuit_breaker_blocks"`
-	
+
 	// Recovery health
-	RecoveryRate     float64 `json:"recovery_rate"`
-	HealthScore      float64 `json:"health_score"`
-	DegradationEnabled bool  `json:"degradation_enabled"`
+	RecoveryRate       float64 `json:"recovery_rate"`
+	HealthScore        float64 `json:"health_score"`
+	DegradationEnabled bool    `json:"degradation_enabled"`
 }
 
 // Error implements the error interface for DiagnosticError
@@ -255,7 +255,7 @@ func (e *DiagnosticError) GetCodeString() string {
 		return "Docker Socket Not Found"
 	case ErrCodeDockerDaemonNotRunning:
 		return "Docker Daemon Not Running"
-	
+
 	// Resource errors
 	case ErrCodeResourceExhaustion:
 		return "Resource Exhaustion"
@@ -269,7 +269,7 @@ func (e *DiagnosticError) GetCodeString() string {
 		return "Resource Conflict"
 	case ErrCodeContainerLimitReached:
 		return "Container Limit Reached"
-	
+
 	// Network errors
 	case ErrCodeNetworkConfiguration:
 		return "Network Configuration Error"
@@ -291,7 +291,7 @@ func (e *DiagnosticError) GetCodeString() string {
 		return "Iptables Configuration Error"
 	case ErrCodeMTUMismatch:
 		return "MTU Mismatch"
-	
+
 	// System errors
 	case ErrCodeSystemConfiguration:
 		return "System Configuration Error"
@@ -303,7 +303,7 @@ func (e *DiagnosticError) GetCodeString() string {
 		return "Configuration Missing"
 	case ErrCodeDependencyMissing:
 		return "Dependency Missing"
-	
+
 	// Context errors
 	case ErrCodeTimeout:
 		return "Timeout"
@@ -313,7 +313,7 @@ func (e *DiagnosticError) GetCodeString() string {
 		return "Deadline Exceeded"
 	case ErrCodeContextExpired:
 		return "Context Expired"
-	
+
 	// Circuit breaker errors
 	case ErrCodeCircuitBreakerOpen:
 		return "Circuit Breaker Open"
@@ -321,7 +321,7 @@ func (e *DiagnosticError) GetCodeString() string {
 		return "Too Many Failures"
 	case ErrCodeServiceUnavailable:
 		return "Service Unavailable"
-	
+
 	default:
 		return fmt.Sprintf("Unknown Error Code (%d)", e.Code)
 	}
@@ -364,7 +364,7 @@ func (e *DiagnosticError) GetImmediateActions() []string {
 	if e.Recovery != nil && len(e.Recovery.Immediate) > 0 {
 		return e.Recovery.Immediate
 	}
-	
+
 	// Default actions based on error type
 	switch e.Type {
 	case ErrTypeConnection:
@@ -404,7 +404,7 @@ func (e *DiagnosticError) GetLongTermActions() []string {
 	if e.Recovery != nil && len(e.Recovery.LongTerm) > 0 {
 		return e.Recovery.LongTerm
 	}
-	
+
 	// Default long-term actions based on error type
 	switch e.Type {
 	case ErrTypeConnection:
@@ -448,38 +448,38 @@ func (e *DiagnosticError) ToMap() map[string]interface{} {
 		"severity":  e.GetSeverityString(),
 		"timestamp": e.Timestamp,
 	}
-	
+
 	if e.Category != "" {
 		result["category"] = e.Category
 	}
-	
+
 	if e.Source != "" {
 		result["source"] = e.Source
 	}
-	
+
 	if e.Context != nil {
 		result["context"] = e.Context
 	}
-	
+
 	if e.RecoveryAttempted {
 		result["recovery_attempted"] = true
 		if e.RecoveryError != "" {
 			result["recovery_error"] = e.RecoveryError
 		}
 	}
-	
+
 	if len(e.Tags) > 0 {
 		result["tags"] = e.Tags
 	}
-	
+
 	if e.UserAction != "" {
 		result["user_action"] = e.UserAction
 	}
-	
+
 	if e.Reference != "" {
 		result["reference"] = e.Reference
 	}
-	
+
 	return result
 }
 
@@ -487,7 +487,7 @@ func (e *DiagnosticError) ToMap() map[string]interface{} {
 func NewDiagnosticError(code ErrorCode, message string) *DiagnosticError {
 	errorType := getErrorTypeFromCode(code)
 	severity := getSeverityFromCode(code)
-	
+
 	return &DiagnosticError{
 		Code:      code,
 		Type:      errorType,

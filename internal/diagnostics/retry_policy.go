@@ -26,7 +26,7 @@
 //       MaxDelay: 10 * time.Second,
 //       BackoffStrategy: ExponentialBackoff,
 //   })
-//   
+//
 //   result, err := policy.Execute(ctx, operation)
 
 package diagnostics
@@ -66,39 +66,39 @@ type RetryPolicyConfig struct {
 	MaxRetries int           // Maximum number of retry attempts
 	MaxDelay   time.Duration // Maximum delay between retries
 	BaseDelay  time.Duration // Initial retry delay
-	
+
 	// Backoff configuration
 	BackoffStrategy   BackoffStrategy // Strategy for calculating delays
 	BackoffMultiplier float64         // Multiplier for exponential backoff
 	JitterFactor      float64         // Amount of jitter to add (0.0-1.0)
-	
+
 	// Retry decision criteria
-	RetryableErrors []ErrorCode // Specific error codes that should be retried
-	NonRetryableErrors []ErrorCode // Error codes that should never be retried
-	MaxRetryBudget time.Duration // Total time budget for all retries
-	
+	RetryableErrors    []ErrorCode   // Specific error codes that should be retried
+	NonRetryableErrors []ErrorCode   // Error codes that should never be retried
+	MaxRetryBudget     time.Duration // Total time budget for all retries
+
 	// Context handling
 	RespectContext bool // Whether to respect context cancellation during retries
 }
 
 // RetryMetrics tracks retry operation statistics and performance.
 type RetryMetrics struct {
-	TotalRetries        int64         // Total number of retry attempts
-	SuccessfulRetries   int64         // Retries that eventually succeeded
-	FailedRetries       int64         // Retries that exhausted all attempts
-	TotalRetryTime      time.Duration // Total time spent in retry operations
-	AverageRetryTime    time.Duration // Average time per retry operation
-	MaxRetryTime        time.Duration // Maximum time for any retry operation
-	
+	TotalRetries      int64         // Total number of retry attempts
+	SuccessfulRetries int64         // Retries that eventually succeeded
+	FailedRetries     int64         // Retries that exhausted all attempts
+	TotalRetryTime    time.Duration // Total time spent in retry operations
+	AverageRetryTime  time.Duration // Average time per retry operation
+	MaxRetryTime      time.Duration // Maximum time for any retry operation
+
 	// Backoff metrics
-	TotalBackoffTime    time.Duration // Total time spent waiting between retries
-	AverageBackoffTime  time.Duration // Average backoff time
-	MaxBackoffTime      time.Duration // Maximum backoff time
-	
+	TotalBackoffTime   time.Duration // Total time spent waiting between retries
+	AverageBackoffTime time.Duration // Average backoff time
+	MaxBackoffTime     time.Duration // Maximum backoff time
+
 	// Error-specific metrics
-	RetriesByErrorType  map[ErrorType]int64 // Retry counts by error type
-	RetriesByErrorCode  map[ErrorCode]int64 // Retry counts by error code
-	
+	RetriesByErrorType map[ErrorType]int64 // Retry counts by error type
+	RetriesByErrorCode map[ErrorCode]int64 // Retry counts by error code
+
 	// Performance metrics
 	FirstAttemptSuccess int64   // Operations that succeeded on first try
 	RetrySuccessRate    float64 // Success rate for retried operations
@@ -149,12 +149,12 @@ func NewRetryPolicy(config *RetryPolicyConfig) *RetryPolicy {
 // The method applies intelligent retry decisions based on error types and system state.
 //
 // Execution flow:
-//   1. Execute operation
-//   2. If successful, return result
-//   3. If failed, analyze error for retry eligibility
-//   4. Calculate backoff delay
-//   5. Wait (respecting context cancellation)
-//   6. Repeat until max retries reached or success
+//  1. Execute operation
+//  2. If successful, return result
+//  3. If failed, analyze error for retry eligibility
+//  4. Calculate backoff delay
+//  5. Wait (respecting context cancellation)
+//  6. Repeat until max retries reached or success
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control
@@ -195,7 +195,7 @@ func (rp *RetryPolicy) Execute(ctx context.Context, operation RecoverableOperati
 
 		// Calculate backoff delay
 		delay := rp.calculateBackoffDelay(attempt)
-		
+
 		// Wait for backoff delay (respecting context)
 		if rp.config.RespectContext {
 			select {
@@ -222,7 +222,7 @@ func (rp *RetryPolicy) Execute(ctx context.Context, operation RecoverableOperati
 		// Update retry metrics
 		rp.metrics.TotalRetries++
 		rp.metrics.TotalRetryTime += retryDuration
-		
+
 		if retryDuration > rp.metrics.MaxRetryTime {
 			rp.metrics.MaxRetryTime = retryDuration
 		}
@@ -251,7 +251,7 @@ func (rp *RetryPolicy) Execute(ctx context.Context, operation RecoverableOperati
 	// All retries exhausted
 	rp.metrics.FailedRetries++
 	rp.updateSuccessRate()
-	
+
 	totalDuration := time.Since(startTime)
 	return nil, fmt.Errorf("operation failed after %d retries in %v: %w", rp.config.MaxRetries, totalDuration, lastError)
 }
@@ -311,7 +311,7 @@ func (rp *RetryPolicy) isRetryableDiagnosticError(diagErr *DiagnosticError) bool
 	case ErrTypeConnection:
 		// Connection errors are generally retryable except permission issues
 		return diagErr.Code != ErrCodeDockerPermissionDenied
-		
+
 	case ErrTypeResource:
 		// Resource errors might be retryable if resources can be freed
 		switch diagErr.Code {
@@ -320,7 +320,7 @@ func (rp *RetryPolicy) isRetryableDiagnosticError(diagErr *DiagnosticError) bool
 		default:
 			return true
 		}
-		
+
 	case ErrTypeNetwork:
 		// Network errors are often retryable
 		switch diagErr.Code {
@@ -329,11 +329,11 @@ func (rp *RetryPolicy) isRetryableDiagnosticError(diagErr *DiagnosticError) bool
 		default:
 			return true
 		}
-		
+
 	case ErrTypeContext:
 		// Context errors - timeout is retryable, cancellation is not
 		return diagErr.Code == ErrCodeTimeout
-		
+
 	case ErrTypeSystem:
 		// System errors depend on the specific issue
 		switch diagErr.Code {
@@ -342,11 +342,11 @@ func (rp *RetryPolicy) isRetryableDiagnosticError(diagErr *DiagnosticError) bool
 		default:
 			return true
 		}
-		
+
 	case ErrTypeCircuitBreaker:
 		// Circuit breaker errors are not retryable at this level
 		return false
-		
+
 	default:
 		// Unknown error types - be conservative
 		return diagErr.Severity != SeverityCritical
@@ -356,7 +356,7 @@ func (rp *RetryPolicy) isRetryableDiagnosticError(diagErr *DiagnosticError) bool
 // isRetryableGenericError applies basic retry logic for non-DiagnosticError types
 func (rp *RetryPolicy) isRetryableGenericError(err error) bool {
 	errorMsg := err.Error()
-	
+
 	// Common retryable patterns
 	retryablePatterns := []string{
 		"connection refused",
@@ -365,13 +365,13 @@ func (rp *RetryPolicy) isRetryableGenericError(err error) bool {
 		"service unavailable",
 		"try again",
 	}
-	
+
 	for _, pattern := range retryablePatterns {
 		if strings.Contains(errorMsg, pattern) {
 			return true
 		}
 	}
-	
+
 	// Common non-retryable patterns
 	nonRetryablePatterns := []string{
 		"permission denied",
@@ -381,13 +381,13 @@ func (rp *RetryPolicy) isRetryableGenericError(err error) bool {
 		"unauthorized",
 		"forbidden",
 	}
-	
+
 	for _, pattern := range nonRetryablePatterns {
 		if strings.Contains(errorMsg, pattern) {
 			return false
 		}
 	}
-	
+
 	// Default to retryable for unknown errors
 	return true
 }
@@ -399,20 +399,20 @@ func (rp *RetryPolicy) calculateBackoffDelay(attempt int) time.Duration {
 	switch rp.config.BackoffStrategy {
 	case LinearBackoff:
 		delay = rp.config.BaseDelay * time.Duration(attempt)
-		
+
 	case ExponentialBackoff:
 		multiplier := math.Pow(rp.config.BackoffMultiplier, float64(attempt-1))
 		delay = time.Duration(float64(rp.config.BaseDelay) * multiplier)
-		
+
 	case JitteredBackoff:
 		multiplier := math.Pow(rp.config.BackoffMultiplier, float64(attempt-1))
 		baseDelay := time.Duration(float64(rp.config.BaseDelay) * multiplier)
-		
+
 		// Add jitter to prevent thundering herd
 		jitterRange := float64(baseDelay) * rp.config.JitterFactor
 		jitter := time.Duration((rp.rand.Float64() - 0.5) * 2 * jitterRange)
 		delay = baseDelay + jitter
-		
+
 	default:
 		// Default to exponential backoff
 		multiplier := math.Pow(2.0, float64(attempt-1))
@@ -438,7 +438,7 @@ func (rp *RetryPolicy) updateSuccessRate() {
 	if totalAttempts > 0 {
 		rp.metrics.RetrySuccessRate = float64(rp.metrics.SuccessfulRetries) / float64(totalAttempts)
 	}
-	
+
 	// Update average times
 	if rp.metrics.TotalRetries > 0 {
 		rp.metrics.AverageRetryTime = rp.metrics.TotalRetryTime / time.Duration(rp.metrics.TotalRetries)
@@ -450,21 +450,21 @@ func (rp *RetryPolicy) updateSuccessRate() {
 func (rp *RetryPolicy) GetMetrics() RetryMetrics {
 	// Update derived metrics before returning
 	rp.updateSuccessRate()
-	
+
 	// Return a copy to prevent external modification
 	metrics := *rp.metrics
-	
+
 	// Copy maps to prevent modification
 	metrics.RetriesByErrorType = make(map[ErrorType]int64)
 	for k, v := range rp.metrics.RetriesByErrorType {
 		metrics.RetriesByErrorType[k] = v
 	}
-	
+
 	metrics.RetriesByErrorCode = make(map[ErrorCode]int64)
 	for k, v := range rp.metrics.RetriesByErrorCode {
 		metrics.RetriesByErrorCode[k] = v
 	}
-	
+
 	return metrics
 }
 
@@ -480,7 +480,7 @@ func (rp *RetryPolicy) Reset() {
 func (rp *RetryPolicy) UpdateConfig(config *RetryPolicyConfig) {
 	if config != nil {
 		rp.config = config
-		
+
 		// Ensure required defaults
 		if rp.config.BackoffMultiplier == 0 {
 			rp.config.BackoffMultiplier = 2.0
@@ -498,46 +498,46 @@ func (rp *RetryPolicy) IsHealthy() bool {
 	if totalRetries < 10 {
 		return true // Not enough data, assume healthy
 	}
-	
+
 	// Check success rate
 	if rp.metrics.RetrySuccessRate < 0.1 { // Less than 10% success rate is concerning
 		return false
 	}
-	
+
 	// Check if average retry time is reasonable
 	if rp.metrics.AverageRetryTime > rp.config.MaxDelay*time.Duration(rp.config.MaxRetries) {
 		return false
 	}
-	
+
 	return true
 }
 
 // GetRecommendations returns configuration recommendations based on metrics
 func (rp *RetryPolicy) GetRecommendations() []string {
 	var recommendations []string
-	
+
 	// Check success rate
 	if rp.metrics.RetrySuccessRate < 0.3 && rp.metrics.TotalRetries > 20 {
 		recommendations = append(recommendations,
 			"Low retry success rate detected. Consider increasing MaxRetries or investigating root causes.")
 	}
-	
+
 	// Check backoff timing
 	if rp.metrics.AverageBackoffTime < rp.config.BaseDelay/2 {
 		recommendations = append(recommendations,
 			"Backoff delays are very short. Consider increasing BaseDelay to reduce system load.")
 	}
-	
+
 	// Check retry distribution by error type
 	if connectionRetries := rp.metrics.RetriesByErrorType[ErrTypeConnection]; connectionRetries > rp.metrics.TotalRetries/2 {
 		recommendations = append(recommendations,
 			"High number of connection-related retries. Consider investigating Docker daemon stability.")
 	}
-	
+
 	if resourceRetries := rp.metrics.RetriesByErrorType[ErrTypeResource]; resourceRetries > rp.metrics.TotalRetries/4 {
 		recommendations = append(recommendations,
 			"Frequent resource-related retries. Consider monitoring system resources and scaling if needed.")
 	}
-	
+
 	return recommendations
 }

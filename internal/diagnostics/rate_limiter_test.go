@@ -12,17 +12,17 @@ import (
 // TestRateLimiterInitialization tests rate limiter creation and configuration
 func TestRateLimiterInitialization(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *RateLimiterConfig
-		expectedRate   float64
-		expectedBurst  int
+		name            string
+		config          *RateLimiterConfig
+		expectedRate    float64
+		expectedBurst   int
 		expectedEnabled bool
 	}{
 		{
-			name:           "default configuration",
-			config:         nil,
-			expectedRate:   DOCKER_API_RATE_LIMIT,
-			expectedBurst:  DOCKER_API_BURST,
+			name:            "default configuration",
+			config:          nil,
+			expectedRate:    DOCKER_API_RATE_LIMIT,
+			expectedBurst:   DOCKER_API_BURST,
 			expectedEnabled: true,
 		},
 		{
@@ -33,8 +33,8 @@ func TestRateLimiterInitialization(t *testing.T) {
 				WaitTimeout:       3 * time.Second,
 				Enabled:           true,
 			},
-			expectedRate:   10.0,
-			expectedBurst:  20,
+			expectedRate:    10.0,
+			expectedBurst:   20,
 			expectedEnabled: true,
 		},
 		{
@@ -45,8 +45,8 @@ func TestRateLimiterInitialization(t *testing.T) {
 				WaitTimeout:       5 * time.Second,
 				Enabled:           false,
 			},
-			expectedRate:   0, // Returns 0 when disabled
-			expectedBurst:  0, // Returns 0 when disabled
+			expectedRate:    0, // Returns 0 when disabled
+			expectedBurst:   0, // Returns 0 when disabled
 			expectedEnabled: false,
 		},
 		{
@@ -57,8 +57,8 @@ func TestRateLimiterInitialization(t *testing.T) {
 				WaitTimeout:       time.Second,
 				Enabled:           true,
 			},
-			expectedRate:   0,
-			expectedBurst:  1,
+			expectedRate:    0,
+			expectedBurst:   1,
 			expectedEnabled: true,
 		},
 	}
@@ -66,7 +66,7 @@ func TestRateLimiterInitialization(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rl := NewRateLimiter(tt.config)
-			
+
 			if rl == nil {
 				t.Fatal("NewRateLimiter returned nil")
 			}
@@ -126,7 +126,7 @@ func TestRateLimiterBasicOperations(t *testing.T) {
 	start := time.Now()
 	err := rl.Wait(ctx)
 	elapsed := time.Since(start)
-	
+
 	if err != nil {
 		t.Errorf("Wait() failed: %v", err)
 	}
@@ -189,8 +189,8 @@ func TestRateLimiterDisabled(t *testing.T) {
 // TestRateLimiterBurstHandling tests burst capacity behavior
 func TestRateLimiterBurstHandling(t *testing.T) {
 	config := &RateLimiterConfig{
-		RequestsPerSecond: 1.0, // Very slow rate for testing
-		BurstSize:         5,   // Large burst
+		RequestsPerSecond: 10.0, // Faster rate for testing (100ms per token)
+		BurstSize:         5,    // Large burst
 		WaitTimeout:       100 * time.Millisecond,
 		Enabled:           true,
 	}
@@ -212,7 +212,7 @@ func TestRateLimiterBurstHandling(t *testing.T) {
 	}
 
 	// Wait for one token to replenish
-	time.Sleep(1100 * time.Millisecond) // Slightly more than 1 second
+	time.Sleep(150 * time.Millisecond) // Slightly more than 100ms
 
 	// Should allow one more request
 	if !rl.TryAcquire() {
@@ -250,7 +250,7 @@ func TestRateLimiterBurstReplenishment(t *testing.T) {
 
 	// Wait for token replenishment (110ms should be enough for 100ms rate)
 	time.Sleep(110 * time.Millisecond)
-	
+
 	// Should allow one more request
 	if !rl.TryAcquire() {
 		t.Error("Expected request to succeed after token replenishment")
@@ -288,7 +288,7 @@ func TestRateLimiterMetricsAccuracy(t *testing.T) {
 	// Test various operations
 	successfulTryAcquire := 0
 	failedTryAcquire := 0
-	
+
 	// Try 10 immediate acquisitions
 	for i := 0; i < 10; i++ {
 		if rl.TryAcquire() {
@@ -301,12 +301,12 @@ func TestRateLimiterMetricsAccuracy(t *testing.T) {
 	// Try some Wait operations (some may timeout)
 	successfulWaits := 0
 	timeoutWaits := 0
-	
+
 	for i := 0; i < 5; i++ {
 		ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		err := rl.Wait(ctx)
 		cancel()
-		
+
 		if err != nil {
 			timeoutWaits++
 		} else {
@@ -316,7 +316,7 @@ func TestRateLimiterMetricsAccuracy(t *testing.T) {
 
 	// Verify metrics
 	metrics := rl.GetMetrics()
-	
+
 	expectedTotal := 10 + 5 // TryAcquire attempts + Wait attempts
 	if metrics.TotalRequests != int64(expectedTotal) {
 		t.Errorf("TotalRequests = %d, want %d", metrics.TotalRequests, expectedTotal)
@@ -398,7 +398,7 @@ func TestRateLimiterConcurrentAccess(t *testing.T) {
 	// Verify metrics consistency
 	metrics := rl.GetMetrics()
 	expectedTotal := int64(numGoroutines * requestsPerGoroutine)
-	
+
 	if metrics.TotalRequests != expectedTotal {
 		t.Errorf("TotalRequests = %d, want %d", metrics.TotalRequests, expectedTotal)
 	}
@@ -437,11 +437,11 @@ func TestRateLimiterContextCancellation(t *testing.T) {
 
 	// Create a context that will be cancelled
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Start a wait operation in a goroutine
 	var waitErr error
 	done := make(chan struct{})
-	
+
 	go func() {
 		waitErr = rl.Wait(ctx)
 		close(done)
@@ -487,7 +487,7 @@ func TestRateLimiterWaitTimeout(t *testing.T) {
 	// Use a cancelled context to force immediate timeout
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel
-	
+
 	err := rl.Wait(ctx)
 
 	if err == nil {
@@ -504,8 +504,8 @@ func TestRateLimiterWaitTimeout(t *testing.T) {
 	// The failure should be recorded somehow
 	totalFailed := metrics.ThrottledRequests + metrics.TimeoutRequests
 	totalAllowed := metrics.AllowedRequests
-	if totalAllowed + totalFailed != totalRequests {
-		t.Errorf("Metrics don't add up: %d allowed + %d failed != %d total", 
+	if totalAllowed+totalFailed != totalRequests {
+		t.Errorf("Metrics don't add up: %d allowed + %d failed != %d total",
 			totalAllowed, totalFailed, totalRequests)
 	}
 }
@@ -591,7 +591,7 @@ func TestRateLimiterReserve(t *testing.T) {
 		WaitTimeout:       time.Second,
 		Enabled:           false,
 	}
-	
+
 	rl.UpdateConfig(disabledConfig)
 	reservation = rl.Reserve()
 	if reservation != nil {
@@ -618,7 +618,7 @@ func TestRateLimiterMetricsCalculations(t *testing.T) {
 	rl.TryAcquire() // Success
 	rl.TryAcquire() // Success
 	rl.TryAcquire() // Success (burst exhausted)
-	
+
 	if rl.TryAcquire() { // Should fail
 		t.Error("Expected TryAcquire to fail after burst exhaustion")
 	}
@@ -634,7 +634,7 @@ func TestRateLimiterMetricsCalculations(t *testing.T) {
 	// Test average wait time calculation
 	avgWaitTime := rl.GetAverageWaitTime()
 	expectedAvg := waitTime / 4 // waitTime divided by AllowedRequests (4)
-	
+
 	// Allow some tolerance for timing variations
 	if avgWaitTime < expectedAvg/2 || avgWaitTime > expectedAvg*2 {
 		t.Errorf("GetAverageWaitTime() = %v, expected around %v", avgWaitTime, expectedAvg)
@@ -643,7 +643,7 @@ func TestRateLimiterMetricsCalculations(t *testing.T) {
 	// Test throttle rate calculation
 	throttleRate := rl.GetThrottleRate()
 	expectedThrottleRate := (1.0 / 5.0) * 100 // 1 throttled out of 5 total = 20%
-	
+
 	if throttleRate != expectedThrottleRate {
 		t.Errorf("GetThrottleRate() = %.2f, want %.2f", throttleRate, expectedThrottleRate)
 	}
@@ -653,7 +653,7 @@ func TestRateLimiterMetricsCalculations(t *testing.T) {
 	if status == "" {
 		t.Error("GetStatus() returned empty string")
 	}
-	
+
 	// Should contain key information
 	if !rateLimiterContains(status, "10.0 req/s") {
 		t.Errorf("Status missing rate info: %s", status)
@@ -674,12 +674,12 @@ func TestRateLimiterEdgeCases(t *testing.T) {
 		}
 
 		rl := NewRateLimiter(config)
-		
+
 		// With zero rate, only burst should be available
 		if !rl.TryAcquire() {
 			t.Error("Expected TryAcquire to succeed with burst capacity")
 		}
-		
+
 		// Second request should fail
 		if rl.TryAcquire() {
 			t.Error("Expected TryAcquire to fail with zero replenishment rate")
@@ -710,7 +710,7 @@ func TestRateLimiterEdgeCases(t *testing.T) {
 		}
 
 		rl := NewRateLimiter(config)
-		
+
 		// With zero burst, no immediate requests should succeed
 		if rl.TryAcquire() {
 			t.Error("Expected TryAcquire to fail with zero burst size")
@@ -726,7 +726,7 @@ func TestRateLimiterEdgeCases(t *testing.T) {
 		}
 
 		rl := NewRateLimiter(config)
-		
+
 		// Should handle very high rates without issues
 		for i := 0; i < 100; i++ {
 			if !rl.TryAcquire() {
@@ -745,14 +745,14 @@ func TestRateLimiterEdgeCases(t *testing.T) {
 		}
 
 		rl := NewRateLimiter(config)
-		
+
 		// Exhaust burst
 		rl.TryAcquire()
-		
+
 		// Wait should not timeout with zero WaitTimeout
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
-		
+
 		err := rl.Wait(ctx)
 		// The context timeout should trigger, not the rate limiter timeout
 		if err == nil {
@@ -788,7 +788,7 @@ func TestRateLimiterStressTest(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			for j := 0; j < requestsPerGoroutine; j++ {
 				// Randomly choose between TryAcquire and Wait
 				if rand.Intn(2) == 0 {
@@ -812,7 +812,7 @@ func TestRateLimiterStressTest(t *testing.T) {
 	}
 
 	requestsPerSecond := float64(totalRequests) / elapsed.Seconds()
-	t.Logf("Stress test: %d requests in %v (%.0f req/s)", 
+	t.Logf("Stress test: %d requests in %v (%.0f req/s)",
 		totalRequests, elapsed, requestsPerSecond)
 
 	// Should be able to handle at least 10,000 requests per second
@@ -855,11 +855,11 @@ func TestRateLimiterMemoryUsage(t *testing.T) {
 
 // Helper function for string contains check
 func rateLimiterContains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || 
-		(len(s) > len(substr) && 
-		 (s[:len(substr)] == substr || 
-		  s[len(s)-len(substr):] == substr ||
-		  rateLimiterContainsSubstring(s, substr))))
+	return len(s) >= len(substr) && (s == substr ||
+		(len(s) > len(substr) &&
+			(s[:len(substr)] == substr ||
+				s[len(s)-len(substr):] == substr ||
+				rateLimiterContainsSubstring(s, substr))))
 }
 
 func rateLimiterContainsSubstring(s, substr string) bool {

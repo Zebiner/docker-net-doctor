@@ -42,7 +42,7 @@ func (m *BenchmarkMetrics) GetCheckDuration(checkName string) time.Duration {
 func (m *BenchmarkMetrics) CalculateParallelSpeedup(sequentialTime, parallelTime time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if parallelTime > 0 {
 		m.ParallelSpeedup = float64(sequentialTime) / float64(parallelTime)
 	}
@@ -65,20 +65,20 @@ func NewBenchmarkEngine(engine *DiagnosticEngine) *BenchmarkEngine {
 // RunWithMetrics executes diagnostics while collecting performance metrics
 func (e *BenchmarkEngine) RunWithMetrics(ctx context.Context) (*Results, *BenchmarkMetrics, error) {
 	startTime := time.Now()
-	
+
 	// Run the actual diagnostics
 	results, err := e.Run(ctx)
-	
+
 	// Record total duration
 	e.metrics.TotalDuration = time.Since(startTime)
-	
+
 	// Record individual check durations if available
 	for _, result := range results.Checks {
 		if duration, ok := result.Details["duration"].(time.Duration); ok {
 			e.metrics.RecordCheckDuration(result.CheckName, duration)
 		}
 	}
-	
+
 	return results, e.metrics, err
 }
 
@@ -115,7 +115,7 @@ func (c *MockCheck) Run(ctx context.Context, client interface{}) (*CheckResult, 
 		// Context cancelled
 		return nil, ctx.Err()
 	}
-	
+
 	return &CheckResult{
 		CheckName: c.name,
 		Success:   !c.shouldFail,
@@ -166,13 +166,13 @@ type ParallelizationStrategy int
 const (
 	// StrategyFullParallel runs all checks in parallel
 	StrategyFullParallel ParallelizationStrategy = iota
-	
+
 	// StrategyGroupParallel runs groups in sequence, checks within groups in parallel
 	StrategyGroupParallel
-	
+
 	// StrategyAdaptive adjusts parallelism based on system resources
 	StrategyAdaptive
-	
+
 	// StrategySequential runs all checks sequentially
 	StrategySequential
 )
@@ -180,7 +180,7 @@ const (
 // OptimizedEngine provides an optimized diagnostic engine for performance testing
 type OptimizedEngine struct {
 	*DiagnosticEngine
-	strategy ParallelizationStrategy
+	strategy   ParallelizationStrategy
 	maxWorkers int
 }
 
@@ -199,17 +199,17 @@ func (e *OptimizedEngine) RunOptimized(ctx context.Context) (*Results, error) {
 	case StrategyFullParallel:
 		e.config.Parallel = true
 		return e.Run(ctx)
-		
+
 	case StrategyGroupParallel:
 		return e.runGroupParallel(ctx)
-		
+
 	case StrategyAdaptive:
 		return e.runAdaptive(ctx)
-		
+
 	case StrategySequential:
 		e.config.Parallel = false
 		return e.Run(ctx)
-		
+
 	default:
 		return e.Run(ctx)
 	}
@@ -220,9 +220,9 @@ func (e *OptimizedEngine) runGroupParallel(ctx context.Context) (*Results, error
 	results := &Results{
 		Checks: make([]*CheckResult, 0),
 	}
-	
+
 	groups := GetDefaultCheckGroups()
-	
+
 	// Run each group sequentially, but checks within groups in parallel
 	for _, groupChecks := range [][]Check{
 		groups.SystemChecks,
@@ -233,7 +233,7 @@ func (e *OptimizedEngine) runGroupParallel(ctx context.Context) (*Results, error
 		groupResults := e.runCheckGroup(ctx, groupChecks)
 		results.Checks = append(results.Checks, groupResults...)
 	}
-	
+
 	e.calculateSummary()
 	return results, nil
 }
@@ -242,7 +242,7 @@ func (e *OptimizedEngine) runGroupParallel(ctx context.Context) (*Results, error
 func (e *OptimizedEngine) runCheckGroup(ctx context.Context, checks []Check) []*CheckResult {
 	var wg sync.WaitGroup
 	resultsChan := make(chan *CheckResult, len(checks))
-	
+
 	for _, check := range checks {
 		wg.Add(1)
 		go func(c Check) {
@@ -251,17 +251,17 @@ func (e *OptimizedEngine) runCheckGroup(ctx context.Context, checks []Check) []*
 			resultsChan <- result
 		}(check)
 	}
-	
+
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
-	
+
 	var results []*CheckResult
 	for result := range resultsChan {
 		results = append(results, result)
 	}
-	
+
 	return results
 }
 
@@ -269,11 +269,11 @@ func (e *OptimizedEngine) runCheckGroup(ctx context.Context, checks []Check) []*
 func (e *OptimizedEngine) runAdaptive(ctx context.Context) (*Results, error) {
 	// Simple adaptive strategy: use parallel for I/O bound checks,
 	// sequential for CPU bound checks
-	
+
 	results := &Results{
 		Checks: make([]*CheckResult, 0),
 	}
-	
+
 	// I/O bound checks (benefit from parallelism)
 	ioChecks := []Check{
 		&ContainerConnectivityCheck{},
@@ -281,7 +281,7 @@ func (e *OptimizedEngine) runAdaptive(ctx context.Context) (*Results, error) {
 		&InternalDNSCheck{},
 		&PortBindingCheck{},
 	}
-	
+
 	// CPU/system checks (less benefit from parallelism)
 	systemChecks := []Check{
 		&DaemonConnectivityCheck{},
@@ -292,17 +292,17 @@ func (e *OptimizedEngine) runAdaptive(ctx context.Context) (*Results, error) {
 		&MTUConsistencyCheck{},
 		&NetworkIsolationCheck{},
 	}
-	
+
 	// Run I/O checks in parallel
 	ioResults := e.runCheckGroup(ctx, ioChecks)
 	results.Checks = append(results.Checks, ioResults...)
-	
+
 	// Run system checks sequentially
 	for _, check := range systemChecks {
 		result := e.runCheckSafely(ctx, check)
 		results.Checks = append(results.Checks, result)
 	}
-	
+
 	e.calculateSummary()
 	return results, nil
 }

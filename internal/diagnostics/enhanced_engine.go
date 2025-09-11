@@ -3,7 +3,7 @@
 // into the Docker Network Doctor diagnostic workflow.
 //
 // This enhanced engine extends the base diagnostic functionality with:
-//   - Integrated error recovery and retry mechanisms  
+//   - Integrated error recovery and retry mechanisms
 //   - Circuit breaker protection against cascade failures
 //   - Graceful degradation for partial system failures
 //   - Automatic resource cleanup and management
@@ -52,23 +52,26 @@ type EnhancedDiagnosticEngine struct {
 	dockerClient *docker.Client
 	checks       []Check
 	config       *EnhancedConfig
-	
+
 	// Core systems
 	errorRecovery       *ErrorRecovery
 	gracefulDegradation *GracefulDegradation
 	resourceCleanup     *ResourceCleanupManager
-	
+
 	// Execution components
-	workerPool   *SecureWorkerPool
-	rateLimiter  *RateLimiter
-	
+	workerPool  *SecureWorkerPool
+	rateLimiter *RateLimiter
+
 	// State and metrics
 	results      *EnhancedResults
 	metrics      *EnhancedEngineMetrics
 	healthStatus *EngineHealthStatus
-	
+
 	// Thread safety
 	mu sync.RWMutex
+
+	// Shutdown control
+	stopCh chan struct{}
 }
 
 // EnhancedConfig extends the base configuration with error recovery and
@@ -81,32 +84,32 @@ type EnhancedConfig struct {
 	TargetFilter string        // Filter for specific containers/networks
 	WorkerCount  int           // Number of worker goroutines
 	RateLimit    float64       // API rate limit
-	
+
 	// Error recovery configuration
-	EnableErrorRecovery    bool           // Enable comprehensive error recovery
-	MaxRetryAttempts       int            // Maximum retry attempts per operation
-	RetryBaseDelay         time.Duration  // Base delay between retries
-	CircuitBreakerEnabled  bool           // Enable circuit breaker protection
-	
+	EnableErrorRecovery   bool          // Enable comprehensive error recovery
+	MaxRetryAttempts      int           // Maximum retry attempts per operation
+	RetryBaseDelay        time.Duration // Base delay between retries
+	CircuitBreakerEnabled bool          // Enable circuit breaker protection
+
 	// Graceful degradation configuration
-	EnableGracefulDegradation bool        // Enable graceful degradation
+	EnableGracefulDegradation bool               // Enable graceful degradation
 	DegradationThresholds     map[string]float64 // Custom degradation thresholds
-	MinimalChecksMode         bool        // Run only essential checks when degraded
-	
+	MinimalChecksMode         bool               // Run only essential checks when degraded
+
 	// Resource management configuration
-	AutoResourceCleanup       bool        // Enable automatic resource cleanup
-	CleanupAfterErrors        bool        // Clean resources after error recovery
-	PreserveDebugResources    bool        // Keep resources for debugging
-	
+	AutoResourceCleanup    bool // Enable automatic resource cleanup
+	CleanupAfterErrors     bool // Clean resources after error recovery
+	PreserveDebugResources bool // Keep resources for debugging
+
 	// Health monitoring configuration
-	EnableHealthMonitoring    bool          // Enable continuous health monitoring
-	HealthCheckInterval       time.Duration // Frequency of health checks
-	HealthRecoveryEnabled     bool          // Enable automatic health recovery
-	
+	EnableHealthMonitoring bool          // Enable continuous health monitoring
+	HealthCheckInterval    time.Duration // Frequency of health checks
+	HealthRecoveryEnabled  bool          // Enable automatic health recovery
+
 	// Advanced configuration
-	AdaptiveExecution         bool          // Enable adaptive execution strategies
-	PerformanceOptimization   bool          // Enable performance optimizations
-	DetailedMetricsEnabled    bool          // Enable detailed metrics collection
+	AdaptiveExecution       bool // Enable adaptive execution strategies
+	PerformanceOptimization bool // Enable performance optimizations
+	DetailedMetricsEnabled  bool // Enable detailed metrics collection
 }
 
 // EnhancedResults extends base results with error recovery and health information
@@ -115,87 +118,87 @@ type EnhancedResults struct {
 	Checks   []*CheckResult
 	Summary  Summary
 	Duration time.Duration
-	
+
 	// Enhanced results
-	ErrorRecoveryResults  *ErrorRecoveryResults  // Error recovery outcomes
-	DegradationStatus     *DegradationStatus     // Degradation information
-	CleanupResults        *CleanupResults        // Resource cleanup outcomes
-	HealthAssessment      *HealthAssessment      // Overall system health
-	
+	ErrorRecoveryResults *ErrorRecoveryResults // Error recovery outcomes
+	DegradationStatus    *DegradationStatus    // Degradation information
+	CleanupResults       *CleanupResults       // Resource cleanup outcomes
+	HealthAssessment     *HealthAssessment     // Overall system health
+
 	// Advanced metrics
-	ExecutionMetrics      *ExecutionMetrics      // Detailed execution metrics
-	PerformanceProfile    *PerformanceProfile    // Performance analysis
-	RecommendationEngine  *RecommendationEngine  // Smart recommendations
+	ExecutionMetrics     *ExecutionMetrics     // Detailed execution metrics
+	PerformanceProfile   *PerformanceProfile   // Performance analysis
+	RecommendationEngine *RecommendationEngine // Smart recommendations
 }
 
 // ErrorRecoveryResults contains outcomes of error recovery operations
 type ErrorRecoveryResults struct {
-	TotalErrorsRecovered    int64                           `json:"total_errors_recovered"`
-	RecoveryStrategiesUsed  map[string]int                  `json:"recovery_strategies_used"`
-	RecoverySuccessRate     float64                         `json:"recovery_success_rate"`
-	CircuitBreakerEvents    []CircuitBreakerEvent           `json:"circuit_breaker_events"`
-	DetailedRecoveryLog     []ErrorRecoveryEvent            `json:"detailed_recovery_log"`
+	TotalErrorsRecovered   int64                 `json:"total_errors_recovered"`
+	RecoveryStrategiesUsed map[string]int        `json:"recovery_strategies_used"`
+	RecoverySuccessRate    float64               `json:"recovery_success_rate"`
+	CircuitBreakerEvents   []CircuitBreakerEvent `json:"circuit_breaker_events"`
+	DetailedRecoveryLog    []ErrorRecoveryEvent  `json:"detailed_recovery_log"`
 }
 
 // CircuitBreakerEvent records circuit breaker state changes
 type CircuitBreakerEvent struct {
-	Timestamp   time.Time      `json:"timestamp"`
-	FromState   CircuitState   `json:"from_state"`
-	ToState     CircuitState   `json:"to_state"`
-	Reason      string         `json:"reason"`
-	CheckName   string         `json:"check_name"`
+	Timestamp time.Time    `json:"timestamp"`
+	FromState CircuitState `json:"from_state"`
+	ToState   CircuitState `json:"to_state"`
+	Reason    string       `json:"reason"`
+	CheckName string       `json:"check_name"`
 }
 
 // ErrorRecoveryEvent records individual error recovery attempts
 type ErrorRecoveryEvent struct {
-	Timestamp       time.Time           `json:"timestamp"`
-	CheckName       string              `json:"check_name"`
-	ErrorType       ErrorType           `json:"error_type"`
-	ErrorCode       ErrorCode           `json:"error_code"`
-	RecoveryAction  string              `json:"recovery_action"`
-	RecoverySuccess bool                `json:"recovery_success"`
-	RetryAttempts   int                 `json:"retry_attempts"`
-	TimeTaken       time.Duration       `json:"time_taken"`
+	Timestamp       time.Time     `json:"timestamp"`
+	CheckName       string        `json:"check_name"`
+	ErrorType       ErrorType     `json:"error_type"`
+	ErrorCode       ErrorCode     `json:"error_code"`
+	RecoveryAction  string        `json:"recovery_action"`
+	RecoverySuccess bool          `json:"recovery_success"`
+	RetryAttempts   int           `json:"retry_attempts"`
+	TimeTaken       time.Duration `json:"time_taken"`
 }
 
 // CleanupResults contains outcomes of resource cleanup operations
 type CleanupResults struct {
-	ResourcesTracked     int64                    `json:"resources_tracked"`
-	ResourcesCleaned     int64                    `json:"resources_cleaned"`
-	CleanupOperations    []CleanupOperationSummary `json:"cleanup_operations"`
-	StorageFreed         int64                    `json:"storage_freed"`
-	CleanupEfficiency    float64                  `json:"cleanup_efficiency"`
+	ResourcesTracked  int64                     `json:"resources_tracked"`
+	ResourcesCleaned  int64                     `json:"resources_cleaned"`
+	CleanupOperations []CleanupOperationSummary `json:"cleanup_operations"`
+	StorageFreed      int64                     `json:"storage_freed"`
+	CleanupEfficiency float64                   `json:"cleanup_efficiency"`
 }
 
 // CleanupOperationSummary summarizes a resource cleanup operation
 type CleanupOperationSummary struct {
-	OperationID     string          `json:"operation_id"`
-	Timestamp       time.Time       `json:"timestamp"`
-	Trigger         CleanupTrigger  `json:"trigger"`
-	ResourcesProcessed int          `json:"resources_processed"`
-	SuccessCount    int            `json:"success_count"`
-	FailureCount    int            `json:"failure_count"`
-	Duration        time.Duration  `json:"duration"`
+	OperationID        string         `json:"operation_id"`
+	Timestamp          time.Time      `json:"timestamp"`
+	Trigger            CleanupTrigger `json:"trigger"`
+	ResourcesProcessed int            `json:"resources_processed"`
+	SuccessCount       int            `json:"success_count"`
+	FailureCount       int            `json:"failure_count"`
+	Duration           time.Duration  `json:"duration"`
 }
 
 // HealthAssessment provides comprehensive system health evaluation
 type HealthAssessment struct {
-	OverallHealthScore    float64                        `json:"overall_health_score"`
-	ComponentHealth       map[string]*ComponentHealth    `json:"component_health"`
-	HealthTrend           HealthTrend                   `json:"health_trend"`
-	CriticalIssues        []CriticalIssue               `json:"critical_issues"`
-	RecommendedActions    []HealthRecommendation        `json:"recommended_actions"`
-	NextHealthCheck       time.Time                     `json:"next_health_check"`
+	OverallHealthScore float64                     `json:"overall_health_score"`
+	ComponentHealth    map[string]*ComponentHealth `json:"component_health"`
+	HealthTrend        HealthTrend                 `json:"health_trend"`
+	CriticalIssues     []CriticalIssue             `json:"critical_issues"`
+	RecommendedActions []HealthRecommendation      `json:"recommended_actions"`
+	NextHealthCheck    time.Time                   `json:"next_health_check"`
 }
 
 // ComponentHealth tracks health of individual system components
 type ComponentHealth struct {
-	ComponentName   string                 `json:"component_name"`
-	HealthScore     float64               `json:"health_score"`
-	Status          ComponentStatus       `json:"status"`
-	LastChecked     time.Time             `json:"last_checked"`
-	Issues          []ComponentIssue      `json:"issues"`
-	Metrics         map[string]float64    `json:"metrics"`
+	ComponentName string             `json:"component_name"`
+	HealthScore   float64            `json:"health_score"`
+	Status        ComponentStatus    `json:"status"`
+	LastChecked   time.Time          `json:"last_checked"`
+	Issues        []ComponentIssue   `json:"issues"`
+	Metrics       map[string]float64 `json:"metrics"`
 }
 
 // ComponentStatus indicates the operational status of a component
@@ -211,11 +214,11 @@ const (
 // ComponentIssue represents an issue affecting a system component
 type ComponentIssue struct {
 	IssueID     string                 `json:"issue_id"`
-	Severity    IssueSeverity         `json:"severity"`
+	Severity    IssueSeverity          `json:"severity"`
 	Description string                 `json:"description"`
 	Impact      string                 `json:"impact"`
 	Resolution  string                 `json:"resolution"`
-	DetectedAt  time.Time             `json:"detected_at"`
+	DetectedAt  time.Time              `json:"detected_at"`
 	Metadata    map[string]interface{} `json:"metadata"`
 }
 
@@ -231,12 +234,12 @@ const (
 
 // CriticalIssue represents a system-wide critical issue
 type CriticalIssue struct {
-	IssueType     string                 `json:"issue_type"`
-	Description   string                 `json:"description"`
-	Impact        CriticalImpact        `json:"impact"`
-	DetectedAt    time.Time             `json:"detected_at"`
-	Resolution    string                 `json:"resolution"`
-	Urgency       IssueUrgency          `json:"urgency"`
+	IssueType   string         `json:"issue_type"`
+	Description string         `json:"description"`
+	Impact      CriticalImpact `json:"impact"`
+	DetectedAt  time.Time      `json:"detected_at"`
+	Resolution  string         `json:"resolution"`
+	Urgency     IssueUrgency   `json:"urgency"`
 }
 
 // CriticalImpact describes the impact of critical issues
@@ -269,7 +272,7 @@ type HealthRecommendation struct {
 	Priority         RecommendationPriority `json:"priority"`
 	Actions          []ActionItem           `json:"actions"`
 	ExpectedBenefit  string                 `json:"expected_benefit"`
-	EstimatedEffort  EffortLevel           `json:"estimated_effort"`
+	EstimatedEffort  EffortLevel            `json:"estimated_effort"`
 }
 
 // RecommendationPriority categorizes recommendation importance
@@ -304,27 +307,27 @@ type ActionItem struct {
 // EnhancedEngineMetrics provides comprehensive metrics about engine operation
 type EnhancedEngineMetrics struct {
 	// Base metrics
-	TotalOperations        int64         `json:"total_operations"`
-	SuccessfulOperations   int64         `json:"successful_operations"`
-	FailedOperations       int64         `json:"failed_operations"`
-	TotalExecutionTime     time.Duration `json:"total_execution_time"`
-	AverageExecutionTime   time.Duration `json:"average_execution_time"`
-	
+	TotalOperations      int64         `json:"total_operations"`
+	SuccessfulOperations int64         `json:"successful_operations"`
+	FailedOperations     int64         `json:"failed_operations"`
+	TotalExecutionTime   time.Duration `json:"total_execution_time"`
+	AverageExecutionTime time.Duration `json:"average_execution_time"`
+
 	// Error recovery metrics
-	ErrorRecoveryMetrics   RecoveryMetrics `json:"error_recovery_metrics"`
-	CircuitBreakerMetrics  CircuitBreakerMetrics `json:"circuit_breaker_metrics"`
-	
+	ErrorRecoveryMetrics  RecoveryMetrics       `json:"error_recovery_metrics"`
+	CircuitBreakerMetrics CircuitBreakerMetrics `json:"circuit_breaker_metrics"`
+
 	// Degradation metrics
-	DegradationMetrics     DegradationMetrics `json:"degradation_metrics"`
-	
-	// Cleanup metrics  
-	CleanupMetrics         CleanupMetrics `json:"cleanup_metrics"`
-	
+	DegradationMetrics DegradationMetrics `json:"degradation_metrics"`
+
+	// Cleanup metrics
+	CleanupMetrics CleanupMetrics `json:"cleanup_metrics"`
+
 	// Performance metrics
-	PerformanceMetrics     PerformanceMetrics `json:"performance_metrics"`
-	
+	PerformanceMetrics PerformanceMetrics `json:"performance_metrics"`
+
 	// Health metrics
-	HealthMetrics          HealthMetrics `json:"health_metrics"`
+	HealthMetrics HealthMetrics `json:"health_metrics"`
 }
 
 // PerformanceMetrics tracks system performance indicators
@@ -341,22 +344,22 @@ type PerformanceMetrics struct {
 
 // HealthMetrics tracks overall system health indicators
 type HealthMetrics struct {
-	OverallHealthScore     float64                    `json:"overall_health_score"`
-	ComponentHealthScores  map[string]float64         `json:"component_health_scores"`
-	HealthTrend           HealthTrend                `json:"health_trend"`
-	CriticalIssueCount    int                        `json:"critical_issue_count"`
-	LastHealthCheck       time.Time                  `json:"last_health_check"`
-	HealthCheckFrequency  time.Duration              `json:"health_check_frequency"`
+	OverallHealthScore    float64            `json:"overall_health_score"`
+	ComponentHealthScores map[string]float64 `json:"component_health_scores"`
+	HealthTrend           HealthTrend        `json:"health_trend"`
+	CriticalIssueCount    int                `json:"critical_issue_count"`
+	LastHealthCheck       time.Time          `json:"last_health_check"`
+	HealthCheckFrequency  time.Duration      `json:"health_check_frequency"`
 }
 
 // EngineHealthStatus represents the overall health status of the diagnostic engine
 type EngineHealthStatus struct {
-	Status              EngineStatus               `json:"status"`
-	LastStatusChange    time.Time                  `json:"last_status_change"`
-	StatusReason        string                     `json:"status_reason"`
-	ComponentStatuses   map[string]ComponentStatus `json:"component_statuses"`
-	ActiveIncidents     []ActiveIncident           `json:"active_incidents"`
-	RecoveryInProgress  bool                       `json:"recovery_in_progress"`
+	Status             EngineStatus               `json:"status"`
+	LastStatusChange   time.Time                  `json:"last_status_change"`
+	StatusReason       string                     `json:"status_reason"`
+	ComponentStatuses  map[string]ComponentStatus `json:"component_statuses"`
+	ActiveIncidents    []ActiveIncident           `json:"active_incidents"`
+	RecoveryInProgress bool                       `json:"recovery_in_progress"`
 }
 
 // EngineStatus represents the operational status of the diagnostic engine
@@ -372,15 +375,15 @@ const (
 
 // ActiveIncident represents an ongoing system incident
 type ActiveIncident struct {
-	IncidentID     string                 `json:"incident_id"`
-	Title          string                 `json:"title"`
-	Severity       IssueSeverity         `json:"severity"`
-	StartTime      time.Time             `json:"start_time"`
-	Description    string                 `json:"description"`
-	AffectedComponents []string           `json:"affected_components"`
-	RecoveryActions []string              `json:"recovery_actions"`
-	Status         IncidentStatus        `json:"status"`
-	Metadata       map[string]interface{} `json:"metadata"`
+	IncidentID         string                 `json:"incident_id"`
+	Title              string                 `json:"title"`
+	Severity           IssueSeverity          `json:"severity"`
+	StartTime          time.Time              `json:"start_time"`
+	Description        string                 `json:"description"`
+	AffectedComponents []string               `json:"affected_components"`
+	RecoveryActions    []string               `json:"recovery_actions"`
+	Status             IncidentStatus         `json:"status"`
+	Metadata           map[string]interface{} `json:"metadata"`
 }
 
 // IncidentStatus represents the status of an active incident
@@ -423,6 +426,7 @@ func NewEnhancedEngine(dockerClient *docker.Client, config *EnhancedConfig) *Enh
 		dockerClient: dockerClient,
 		config:       config,
 		metrics:      &EnhancedEngineMetrics{},
+		stopCh:       make(chan struct{}),
 		healthStatus: &EngineHealthStatus{
 			Status:            EngineStatusHealthy,
 			LastStatusChange:  time.Now(),
@@ -446,10 +450,10 @@ func NewEnhancedEngine(dockerClient *docker.Client, config *EnhancedConfig) *Enh
 	// Initialize graceful degradation if enabled
 	if config.EnableGracefulDegradation {
 		degradationConfig := &DegradationConfig{
-			EnableAutoDetection:    true,
-			DefaultLevel:          DegradationNormal,
-			HealthCheckInterval:   config.HealthCheckInterval,
-			EnableAutoRecovery:    config.HealthRecoveryEnabled,
+			EnableAutoDetection: true,
+			DefaultLevel:        DegradationNormal,
+			HealthCheckInterval: config.HealthCheckInterval,
+			EnableAutoRecovery:  config.HealthRecoveryEnabled,
 		}
 		engine.gracefulDegradation = NewGracefulDegradation(degradationConfig)
 	}
@@ -484,7 +488,7 @@ func NewEnhancedEngine(dockerClient *docker.Client, config *EnhancedConfig) *Enh
 // Run executes all diagnostic checks with comprehensive error recovery and resilience
 func (e *EnhancedDiagnosticEngine) Run(ctx context.Context) (*EnhancedResults, error) {
 	startTime := time.Now()
-	
+
 	// Apply global timeout
 	ctx, cancel := context.WithTimeout(ctx, e.config.Timeout)
 	defer cancel()
@@ -509,9 +513,9 @@ func (e *EnhancedDiagnosticEngine) Run(ctx context.Context) (*EnhancedResults, e
 		checks = e.gracefulDegradation.FilterChecks(checks)
 		degradationStatus := e.gracefulDegradation.GetDegradationStatus()
 		e.results.DegradationStatus = &degradationStatus
-		
+
 		if degradationStatus.Level != DegradationNormal && e.config.Verbose {
-			fmt.Printf("Running in degraded mode: %s - %s\n", 
+			fmt.Printf("Running in degraded mode: %s - %s\n",
 				degradationStatus.Level.String(), degradationStatus.Reason)
 		}
 	}
@@ -569,22 +573,22 @@ func (e *EnhancedDiagnosticEngine) runWithErrorRecovery(ctx context.Context, che
 	var wg sync.WaitGroup
 	resultsChan := make(chan *CheckResult, len(checks))
 	errorsChan := make(chan error, len(checks))
-	
+
 	// Create semaphore for controlled concurrency
 	semaphore := make(chan struct{}, e.config.WorkerCount)
-	
+
 	for _, check := range checks {
 		wg.Add(1)
 		go func(c Check) {
 			defer wg.Done()
-			
+
 			// Acquire semaphore
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			
+
 			// Execute check with error recovery
 			result, err := e.executeCheckWithRecovery(ctx, c)
-			
+
 			if err != nil {
 				errorsChan <- err
 			} else {
@@ -592,14 +596,14 @@ func (e *EnhancedDiagnosticEngine) runWithErrorRecovery(ctx context.Context, che
 			}
 		}(check)
 	}
-	
+
 	// Wait for all checks to complete
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 		close(errorsChan)
 	}()
-	
+
 	// Collect results and errors
 	var errors []error
 	for {
@@ -619,29 +623,29 @@ func (e *EnhancedDiagnosticEngine) runWithErrorRecovery(ctx context.Context, che
 				errors = append(errors, err)
 			}
 		}
-		
+
 		if resultsChan == nil && errorsChan == nil {
 			break
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered %d errors during parallel execution: %v", len(errors), errors[0])
 	}
-	
+
 	return nil
 }
 
 // runSequentialWithRecovery executes checks sequentially with error recovery
 func (e *EnhancedDiagnosticEngine) runSequentialWithRecovery(ctx context.Context, checks []Check) error {
 	var errors []error
-	
+
 	for _, check := range checks {
 		result, err := e.executeCheckWithRecovery(ctx, check)
-		
+
 		if err != nil {
 			errors = append(errors, err)
-			
+
 			// Check if we should continue after this error
 			if e.shouldStopOnError(check, err) {
 				break
@@ -649,7 +653,7 @@ func (e *EnhancedDiagnosticEngine) runSequentialWithRecovery(ctx context.Context
 		} else {
 			e.results.Checks = append(e.results.Checks, result)
 		}
-		
+
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
@@ -657,11 +661,11 @@ func (e *EnhancedDiagnosticEngine) runSequentialWithRecovery(ctx context.Context
 		default:
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered %d errors during sequential execution: %v", len(errors), errors[0])
 	}
-	
+
 	return nil
 }
 
@@ -670,27 +674,27 @@ func (e *EnhancedDiagnosticEngine) executeCheckWithRecovery(ctx context.Context,
 	if e.config.Verbose {
 		fmt.Printf("Executing check: %s\n", check.Description())
 	}
-	
+
 	// Create recoverable operation from check
 	operation := func(ctx interface{}) (interface{}, error) {
 		checkCtx := ctx.(context.Context)
 		return check.Run(checkCtx, e.dockerClient)
 	}
-	
+
 	// Execute with error recovery if enabled
 	if e.errorRecovery != nil {
 		result, err := e.errorRecovery.ExecuteWithRecovery(ctx, operation)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if checkResult, ok := result.(*CheckResult); ok {
 			return checkResult, nil
 		}
-		
+
 		return nil, fmt.Errorf("unexpected result type from check %s", check.Name())
 	}
-	
+
 	// Fallback to direct execution
 	return check.Run(ctx, e.dockerClient)
 }
@@ -699,21 +703,21 @@ func (e *EnhancedDiagnosticEngine) executeCheckWithRecovery(ctx context.Context,
 func (e *EnhancedDiagnosticEngine) registerDefaultChecks() {
 	// Start with basic connectivity to Docker daemon
 	e.checks = append(e.checks, &DaemonConnectivityCheck{})
-	
+
 	// Network infrastructure checks
 	e.checks = append(e.checks, &BridgeNetworkCheck{})
 	e.checks = append(e.checks, &IPForwardingCheck{})
 	e.checks = append(e.checks, &IptablesCheck{})
-	
+
 	// DNS checks
 	e.checks = append(e.checks, &DNSResolutionCheck{})
 	e.checks = append(e.checks, &InternalDNSCheck{})
-	
+
 	// Container-specific checks
 	e.checks = append(e.checks, &ContainerConnectivityCheck{})
 	e.checks = append(e.checks, &PortBindingCheck{})
 	e.checks = append(e.checks, &NetworkIsolationCheck{})
-	
+
 	// Advanced checks
 	e.checks = append(e.checks, &MTUConsistencyCheck{})
 	e.checks = append(e.checks, &SubnetOverlapCheck{})
@@ -725,11 +729,13 @@ func (e *EnhancedDiagnosticEngine) registerDefaultChecks() {
 func (e *EnhancedDiagnosticEngine) healthMonitoringLoop() {
 	ticker := time.NewTicker(e.config.HealthCheckInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
 			e.assessSystemHealth()
+		case <-e.stopCh:
+			return
 		}
 	}
 }
@@ -780,13 +786,13 @@ func (e *EnhancedDiagnosticEngine) calculateSummary() {
 		TotalChecks:    len(e.results.Checks),
 		CriticalIssues: make([]string, 0),
 	}
-	
+
 	for _, result := range e.results.Checks {
 		if result.Success {
 			summary.PassedChecks++
 		} else {
 			summary.FailedChecks++
-			
+
 			// Track critical issues for quick reference
 			for _, check := range e.checks {
 				if check.Name() == result.CheckName && check.Severity() == SeverityCritical {
@@ -796,7 +802,7 @@ func (e *EnhancedDiagnosticEngine) calculateSummary() {
 			}
 		}
 	}
-	
+
 	e.results.Summary = summary
 }
 
@@ -804,20 +810,20 @@ func (e *EnhancedDiagnosticEngine) calculateSummary() {
 func (e *EnhancedDiagnosticEngine) GetMetrics() EnhancedEngineMetrics {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	// Collect metrics from all subsystems
 	if e.errorRecovery != nil {
 		e.metrics.ErrorRecoveryMetrics = e.errorRecovery.GetMetrics()
 	}
-	
+
 	if e.gracefulDegradation != nil {
 		e.metrics.DegradationMetrics = e.gracefulDegradation.GetMetrics()
 	}
-	
+
 	if e.resourceCleanup != nil {
 		e.metrics.CleanupMetrics = e.resourceCleanup.GetMetrics()
 	}
-	
+
 	return *e.metrics
 }
 
@@ -831,23 +837,36 @@ func (e *EnhancedDiagnosticEngine) GetHealthStatus() EngineHealthStatus {
 // Shutdown performs graceful shutdown of the enhanced engine
 func (e *EnhancedDiagnosticEngine) Shutdown(ctx context.Context) error {
 	var errors []error
-	
+
+	// Stop health monitoring goroutine
+	select {
+	case <-e.stopCh:
+		// Already stopped
+	default:
+		close(e.stopCh)
+	}
+
 	if e.errorRecovery != nil {
 		if err := e.errorRecovery.Shutdown(ctx); err != nil {
 			errors = append(errors, fmt.Errorf("error recovery shutdown failed: %w", err))
 		}
 	}
-	
+
 	if e.resourceCleanup != nil {
 		if err := e.resourceCleanup.Shutdown(ctx); err != nil {
 			errors = append(errors, fmt.Errorf("resource cleanup shutdown failed: %w", err))
 		}
 	}
-	
+
+	// Also stop the graceful degradation if it exists
+	if e.gracefulDegradation != nil {
+		e.gracefulDegradation.Stop()
+	}
+
 	if len(errors) > 0 {
 		return fmt.Errorf("shutdown completed with errors: %v", errors)
 	}
-	
+
 	return nil
 }
 

@@ -35,6 +35,13 @@ func (c *ContainerConnectivityCheck) Run(ctx context.Context, client *docker.Cli
 		Suggestions: make([]string, 0),
 	}
 
+	// Check if client is available
+	if client == nil {
+		result.Success = false
+		result.Message = "Docker client is not available for container connectivity check"
+		return result, nil
+	}
+
 	// Get all running containers
 	containers, err := client.ListContainers(ctx)
 	if err != nil {
@@ -147,6 +154,13 @@ func (c *PortBindingCheck) Run(ctx context.Context, client *docker.Client) (*Che
 		Success:     true,
 	}
 
+	// Check if client is available
+	if client == nil {
+		result.Success = false
+		result.Message = "Docker client is not available for port binding check"
+		return result, nil
+	}
+
 	containers, err := client.ListContainers(ctx)
 	if err != nil {
 		result.Success = false
@@ -170,7 +184,7 @@ func (c *PortBindingCheck) Run(ctx context.Context, client *docker.Client) (*Che
 			}
 
 			checkedPorts++
-			
+
 			// Build the port key for conflict detection
 			portKey := fmt.Sprintf("%d/%s", port.PublicPort, port.Type)
 			if port.IP != "" && port.IP != "0.0.0.0" {

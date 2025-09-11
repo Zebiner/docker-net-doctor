@@ -16,11 +16,11 @@
 // the Check interface, making it easy to add new checks or customize existing ones.
 //
 // Example usage:
-//   client, _ := docker.NewClient(ctx)
-//   config := &Config{Parallel: true, Timeout: 30*time.Second}
-//   engine := NewEngine(client, config)
-//   results, err := engine.Run(ctx)
 //
+//	client, _ := docker.NewClient(ctx)
+//	config := &Config{Parallel: true, Timeout: 30*time.Second}
+//	engine := NewEngine(client, config)
+//	results, err := engine.Run(ctx)
 package diagnostics
 
 import (
@@ -50,8 +50,8 @@ type DiagnosticEngine struct {
 	checks       []Check
 	results      *Results
 	config       *Config
-	workerPool   *SecureWorkerPool  // New: secure worker pool for parallel execution
-	rateLimiter  *RateLimiter       // New: rate limiter for API calls
+	workerPool   *SecureWorkerPool // New: secure worker pool for parallel execution
+	rateLimiter  *RateLimiter      // New: rate limiter for API calls
 }
 
 // Config holds configuration options for the diagnostic engine.
@@ -75,14 +75,15 @@ type Config struct {
 // The Run method will be called with a valid context and Docker client.
 //
 // Example implementation:
-//   type MyCheck struct{}
-//   func (c *MyCheck) Name() string { return "my_check" }
-//   func (c *MyCheck) Description() string { return "My diagnostic check" }
-//   func (c *MyCheck) Severity() Severity { return SeverityWarning }
-//   func (c *MyCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
-//       // Perform diagnostic logic
-//       return &CheckResult{Success: true, Message: "OK"}, nil
-//   }
+//
+//	type MyCheck struct{}
+//	func (c *MyCheck) Name() string { return "my_check" }
+//	func (c *MyCheck) Description() string { return "My diagnostic check" }
+//	func (c *MyCheck) Severity() Severity { return SeverityWarning }
+//	func (c *MyCheck) Run(ctx context.Context, client *docker.Client) (*CheckResult, error) {
+//	    // Perform diagnostic logic
+//	    return &CheckResult{Success: true, Message: "OK"}, nil
+//	}
 type Check interface {
 	Name() string
 	Description() string
@@ -118,7 +119,7 @@ type CheckResult struct {
 	Details     map[string]interface{} // Additional diagnostic data
 	Suggestions []string               // Suggested fixes
 	Timestamp   time.Time
-	Duration    time.Duration          // New: execution time
+	Duration    time.Duration // New: execution time
 }
 
 // Results aggregates all diagnostic results from an engine run.
@@ -132,7 +133,7 @@ type Results struct {
 	Checks   []*CheckResult
 	Summary  Summary
 	Duration time.Duration
-	Metrics  *ExecutionMetrics      // New: performance metrics
+	Metrics  *ExecutionMetrics // New: performance metrics
 }
 
 // Summary provides a high-level overview of diagnostic results.
@@ -201,7 +202,7 @@ func NewEngine(dockerClient *docker.Client, config *Config) *DiagnosticEngine {
 	engine := &DiagnosticEngine{
 		dockerClient: dockerClient,
 		config:       config,
-		results:      &Results{
+		results: &Results{
 			Checks:  make([]*CheckResult, 0),
 			Metrics: &ExecutionMetrics{},
 		},
@@ -215,38 +216,38 @@ func NewEngine(dockerClient *docker.Client, config *Config) *DiagnosticEngine {
 
 	// Register all default checks in order of importance
 	engine.registerDefaultChecks()
-	
+
 	return engine
 }
 
 // registerDefaultChecks adds all standard diagnostic checks to the engine.
 // Checks are registered in order of importance:
-//   1. Basic connectivity (Docker daemon)
-//   2. Network infrastructure (bridge, IP forwarding, iptables)
-//   3. DNS resolution (external and internal)
-//   4. Container connectivity and isolation
-//   5. Advanced checks (MTU, subnet overlap)
+//  1. Basic connectivity (Docker daemon)
+//  2. Network infrastructure (bridge, IP forwarding, iptables)
+//  3. DNS resolution (external and internal)
+//  4. Container connectivity and isolation
+//  5. Advanced checks (MTU, subnet overlap)
 //
 // This ensures that fundamental issues are detected before proceeding to
 // more complex diagnostics.
 func (e *DiagnosticEngine) registerDefaultChecks() {
 	// Start with basic connectivity to Docker daemon
 	e.checks = append(e.checks, &DaemonConnectivityCheck{})
-	
+
 	// Network infrastructure checks
 	e.checks = append(e.checks, &BridgeNetworkCheck{})
 	e.checks = append(e.checks, &IPForwardingCheck{})
 	e.checks = append(e.checks, &IptablesCheck{})
-	
+
 	// DNS checks
 	e.checks = append(e.checks, &DNSResolutionCheck{})
 	e.checks = append(e.checks, &InternalDNSCheck{})
-	
+
 	// Container-specific checks
 	e.checks = append(e.checks, &ContainerConnectivityCheck{})
 	e.checks = append(e.checks, &PortBindingCheck{})
 	e.checks = append(e.checks, &NetworkIsolationCheck{})
-	
+
 	// Advanced checks
 	e.checks = append(e.checks, &MTUConsistencyCheck{})
 	e.checks = append(e.checks, &SubnetOverlapCheck{})
@@ -269,7 +270,7 @@ func (e *DiagnosticEngine) registerDefaultChecks() {
 //   - Error if the diagnostic engine fails to complete
 func (e *DiagnosticEngine) Run(ctx context.Context) (*Results, error) {
 	startTime := time.Now()
-	
+
 	// Apply global timeout
 	ctx, cancel := context.WithTimeout(ctx, e.config.Timeout)
 	defer cancel()
@@ -292,7 +293,7 @@ func (e *DiagnosticEngine) Run(ctx context.Context) (*Results, error) {
 	e.results.Metrics.TotalDuration = e.results.Duration
 	e.calculateSummary()
 	e.calculateMetrics()
-	
+
 	return e.results, nil
 }
 
@@ -338,10 +339,10 @@ func (e *DiagnosticEngine) runWithWorkerPool(ctx context.Context) error {
 	resultsChan := pool.GetResults()
 	collectedCount := 0
 	expectedCount := len(e.checks)
-	
+
 	// Use timeout for result collection
 	timeout := time.After(e.config.Timeout)
-	
+
 	for collectedCount < expectedCount {
 		select {
 		case result, ok := <-resultsChan:
@@ -349,7 +350,7 @@ func (e *DiagnosticEngine) runWithWorkerPool(ctx context.Context) error {
 				// Channel closed
 				break
 			}
-			
+
 			if result.Result != nil {
 				result.Result.Duration = result.Duration
 				e.results.mu.Lock()
@@ -357,14 +358,14 @@ func (e *DiagnosticEngine) runWithWorkerPool(ctx context.Context) error {
 				e.results.mu.Unlock()
 			}
 			collectedCount++
-			
+
 		case <-timeout:
 			if e.config.Verbose {
-				fmt.Printf("Timeout collecting results. Got %d/%d results\n", 
+				fmt.Printf("Timeout collecting results. Got %d/%d results\n",
 					collectedCount, expectedCount)
 			}
 			return nil // Partial results are better than none
-			
+
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -391,12 +392,12 @@ func (e *DiagnosticEngine) runWithWorkerPool(ctx context.Context) error {
 func (e *DiagnosticEngine) runParallel(ctx context.Context) {
 	var wg sync.WaitGroup
 	resultsChan := make(chan *CheckResult, len(e.checks))
-	
+
 	for _, check := range e.checks {
 		wg.Add(1)
 		go func(c Check) {
 			defer wg.Done()
-			
+
 			// Apply rate limiting
 			if err := e.rateLimiter.Wait(ctx); err != nil {
 				resultsChan <- &CheckResult{
@@ -407,19 +408,19 @@ func (e *DiagnosticEngine) runParallel(ctx context.Context) {
 				}
 				return
 			}
-			
+
 			// Run check with panic recovery
 			result := e.runCheckSafely(ctx, c)
 			resultsChan <- result
 		}(check)
 	}
-	
+
 	// Wait for all checks to complete
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
-	
+
 	// Collect results
 	for result := range resultsChan {
 		e.results.mu.Lock()
@@ -452,12 +453,12 @@ func (e *DiagnosticEngine) runSequential(ctx context.Context) {
 			})
 			continue
 		}
-		
+
 		startTime := time.Now()
 		result := e.runCheckSafely(ctx, check)
 		result.Duration = time.Since(startTime)
 		e.results.Checks = append(e.results.Checks, result)
-		
+
 		// Stop on critical failure if configured
 		if !result.Success && e.shouldStopOnFailure(check) {
 			break
@@ -488,15 +489,15 @@ func (e *DiagnosticEngine) runCheckSafely(ctx context.Context, check Check) *Che
 			fmt.Printf("Check %s panicked: %v\n", check.Name(), r)
 		}
 	}()
-	
+
 	if e.config.Verbose {
 		fmt.Printf("Running check: %s\n", check.Description())
 	}
-	
+
 	startTime := time.Now()
 	result, err := check.Run(ctx, e.dockerClient)
 	duration := time.Since(startTime)
-	
+
 	if err != nil {
 		return &CheckResult{
 			CheckName: check.Name(),
@@ -506,7 +507,7 @@ func (e *DiagnosticEngine) runCheckSafely(ctx context.Context, check Check) *Che
 			Duration:  duration,
 		}
 	}
-	
+
 	if result == nil {
 		result = &CheckResult{
 			CheckName: check.Name(),
@@ -518,7 +519,7 @@ func (e *DiagnosticEngine) runCheckSafely(ctx context.Context, check Check) *Che
 	} else {
 		result.Duration = duration
 	}
-	
+
 	return result
 }
 
@@ -544,13 +545,13 @@ func (e *DiagnosticEngine) calculateSummary() {
 		TotalChecks:    len(e.results.Checks),
 		CriticalIssues: make([]string, 0),
 	}
-	
+
 	for _, result := range e.results.Checks {
 		if result.Success {
 			summary.PassedChecks++
 		} else {
 			summary.FailedChecks++
-			
+
 			// Track critical issues for quick reference
 			for _, check := range e.checks {
 				if check.Name() == result.CheckName && check.Severity() == SeverityCritical {
@@ -560,7 +561,7 @@ func (e *DiagnosticEngine) calculateSummary() {
 			}
 		}
 	}
-	
+
 	e.results.Summary = summary
 }
 
@@ -624,12 +625,12 @@ func (e *DiagnosticEngine) calculateMetrics() {
 // Returns a prioritized list of recommendations with specific commands to run.
 func (e *DiagnosticEngine) GetRecommendations() []Recommendation {
 	recommendations := make([]Recommendation, 0)
-	
+
 	// Analyze patterns in failures
 	networkIssues := 0
 	dnsIssues := 0
 	connectivityIssues := 0
-	
+
 	for _, result := range e.results.Checks {
 		if !result.Success {
 			switch result.CheckName {
@@ -642,7 +643,7 @@ func (e *DiagnosticEngine) GetRecommendations() []Recommendation {
 			}
 		}
 	}
-	
+
 	// Generate high-level recommendations based on patterns
 	if networkIssues > 1 {
 		recommendations = append(recommendations, Recommendation{
@@ -657,7 +658,7 @@ func (e *DiagnosticEngine) GetRecommendations() []Recommendation {
 			},
 		})
 	}
-	
+
 	if dnsIssues > 0 {
 		recommendations = append(recommendations, Recommendation{
 			Priority: PriorityMedium,
@@ -670,19 +671,19 @@ func (e *DiagnosticEngine) GetRecommendations() []Recommendation {
 			},
 		})
 	}
-	
+
 	// Add performance recommendation if parallel execution was beneficial
 	if e.results.Metrics.ParallelExecution && e.results.Metrics.TotalDuration < 500*time.Millisecond {
 		recommendations = append(recommendations, Recommendation{
 			Priority: PriorityLow,
 			Category: "Performance",
 			Title:    "Excellent diagnostic performance",
-			Action:   fmt.Sprintf("Diagnostics completed in %v using %d workers", 
+			Action: fmt.Sprintf("Diagnostics completed in %v using %d workers",
 				e.results.Metrics.TotalDuration, e.results.Metrics.WorkerCount),
 			Commands: []string{},
 		})
 	}
-	
+
 	return recommendations
 }
 
@@ -705,17 +706,17 @@ func (e *DiagnosticEngine) GetExecutionReport() string {
 	m := e.results.Metrics
 	report := fmt.Sprintf(
 		"Execution Report:\n"+
-		"================\n"+
-		"Mode: %s\n"+
-		"Workers: %d\n"+
-		"Total Duration: %v\n"+
-		"Average Check Time: %v\n"+
-		"Max Check Time: %v\n"+
-		"Min Check Time: %v\n"+
-		"Memory Usage: %.2f MB\n"+
-		"API Calls: %d\n"+
-		"Rate Limit Hits: %d\n"+
-		"Error Rate: %.2f%%\n",
+			"================\n"+
+			"Mode: %s\n"+
+			"Workers: %d\n"+
+			"Total Duration: %v\n"+
+			"Average Check Time: %v\n"+
+			"Max Check Time: %v\n"+
+			"Min Check Time: %v\n"+
+			"Memory Usage: %.2f MB\n"+
+			"API Calls: %d\n"+
+			"Rate Limit Hits: %d\n"+
+			"Error Rate: %.2f%%\n",
 		func() string {
 			if m.ParallelExecution {
 				return "Parallel"

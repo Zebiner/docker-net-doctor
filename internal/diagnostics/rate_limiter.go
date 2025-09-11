@@ -12,10 +12,10 @@ import (
 
 // RateLimiter provides rate limiting for Docker API calls
 type RateLimiter struct {
-	limiter      *rate.Limiter
-	mu           sync.RWMutex
-	metrics      *RateLimiterMetrics
-	config       *RateLimiterConfig
+	limiter *rate.Limiter
+	mu      sync.RWMutex
+	metrics *RateLimiterMetrics
+	config  *RateLimiterConfig
 }
 
 // RateLimiterConfig configures the rate limiter
@@ -28,14 +28,14 @@ type RateLimiterConfig struct {
 
 // RateLimiterMetrics tracks rate limiter statistics
 type RateLimiterMetrics struct {
-	mu               sync.RWMutex
-	TotalRequests    int64
-	AllowedRequests  int64
+	mu                sync.RWMutex
+	TotalRequests     int64
+	AllowedRequests   int64
 	ThrottledRequests int64
-	TimeoutRequests  int64
-	TotalWaitTime    time.Duration
-	MaxWaitTime      time.Duration
-	LastRequest      time.Time
+	TimeoutRequests   int64
+	TotalWaitTime     time.Duration
+	MaxWaitTime       time.Duration
+	LastRequest       time.Time
 }
 
 // DefaultRateLimiterConfig returns the default rate limiter configuration
@@ -163,7 +163,7 @@ func (rl *RateLimiter) updateMetrics(err error, waitTime time.Duration) {
 		rl.metrics.AllowedRequests++
 		rl.metrics.LastRequest = time.Now()
 		rl.metrics.TotalWaitTime += waitTime
-		
+
 		if waitTime > rl.metrics.MaxWaitTime {
 			rl.metrics.MaxWaitTime = waitTime
 		}
@@ -171,18 +171,28 @@ func (rl *RateLimiter) updateMetrics(err error, waitTime time.Duration) {
 }
 
 // GetMetrics returns current rate limiter metrics
-func (rl *RateLimiter) GetMetrics() RateLimiterMetrics {
+func (rl *RateLimiter) GetMetrics() *RateLimiterMetrics {
 	rl.metrics.mu.RLock()
 	defer rl.metrics.mu.RUnlock()
-	
-	return *rl.metrics
+
+	// Create a copy without the mutex to avoid lock copying
+	return &RateLimiterMetrics{
+		TotalRequests:     rl.metrics.TotalRequests,
+		AllowedRequests:   rl.metrics.AllowedRequests,
+		ThrottledRequests: rl.metrics.ThrottledRequests,
+		TimeoutRequests:   rl.metrics.TimeoutRequests,
+		TotalWaitTime:     rl.metrics.TotalWaitTime,
+		MaxWaitTime:       rl.metrics.MaxWaitTime,
+		LastRequest:       rl.metrics.LastRequest,
+		// Deliberately omit mu field to avoid copying mutex
+	}
 }
 
 // ResetMetrics resets the rate limiter metrics
 func (rl *RateLimiter) ResetMetrics() {
 	rl.metrics.mu.Lock()
 	defer rl.metrics.mu.Unlock()
-	
+
 	rl.metrics = &RateLimiterMetrics{}
 }
 
@@ -192,7 +202,7 @@ func (rl *RateLimiter) UpdateConfig(config *RateLimiterConfig) {
 	defer rl.mu.Unlock()
 
 	rl.config = config
-	
+
 	if config.Enabled {
 		rl.limiter = rate.NewLimiter(rate.Limit(config.RequestsPerSecond), config.BurstSize)
 	} else {
@@ -204,7 +214,7 @@ func (rl *RateLimiter) UpdateConfig(config *RateLimiterConfig) {
 func (rl *RateLimiter) IsEnabled() bool {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
-	
+
 	return rl.config.Enabled
 }
 
@@ -212,7 +222,7 @@ func (rl *RateLimiter) IsEnabled() bool {
 func (rl *RateLimiter) GetConfig() RateLimiterConfig {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
-	
+
 	return *rl.config
 }
 
@@ -220,11 +230,11 @@ func (rl *RateLimiter) GetConfig() RateLimiterConfig {
 func (rl *RateLimiter) GetEffectiveRate() float64 {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
-	
+
 	if !rl.config.Enabled || rl.limiter == nil {
 		return 0 // No limit
 	}
-	
+
 	return rl.config.RequestsPerSecond
 }
 
@@ -232,11 +242,11 @@ func (rl *RateLimiter) GetEffectiveRate() float64 {
 func (rl *RateLimiter) GetBurstSize() int {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
-	
+
 	if !rl.config.Enabled {
 		return 0
 	}
-	
+
 	return rl.config.BurstSize
 }
 
@@ -244,11 +254,11 @@ func (rl *RateLimiter) GetBurstSize() int {
 func (rl *RateLimiter) GetAverageWaitTime() time.Duration {
 	rl.metrics.mu.RLock()
 	defer rl.metrics.mu.RUnlock()
-	
+
 	if rl.metrics.AllowedRequests == 0 {
 		return 0
 	}
-	
+
 	return rl.metrics.TotalWaitTime / time.Duration(rl.metrics.AllowedRequests)
 }
 
@@ -256,11 +266,11 @@ func (rl *RateLimiter) GetAverageWaitTime() time.Duration {
 func (rl *RateLimiter) GetThrottleRate() float64 {
 	rl.metrics.mu.RLock()
 	defer rl.metrics.mu.RUnlock()
-	
+
 	if rl.metrics.TotalRequests == 0 {
 		return 0
 	}
-	
+
 	throttled := rl.metrics.ThrottledRequests + rl.metrics.TimeoutRequests
 	return float64(throttled) / float64(rl.metrics.TotalRequests) * 100
 }

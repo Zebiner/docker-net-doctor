@@ -10,20 +10,20 @@ import (
 
 // MetricsCollector handles real-time collection of performance metrics
 type MetricsCollector struct {
-	profiler      *PerformanceProfiler
-	interval      time.Duration
-	stopChan      chan struct{}
-	wg            sync.WaitGroup
-	running       atomic.Bool
-	
+	profiler *PerformanceProfiler
+	interval time.Duration
+	stopChan chan struct{}
+	wg       sync.WaitGroup
+	running  atomic.Bool
+
 	// Metrics collection state
-	lastCPUTime   time.Time
-	lastCPUUsage  float64
-	
+	lastCPUTime  time.Time
+	lastCPUUsage float64
+
 	// Sampling data
-	samples       []MetricsSample
-	samplesMu     sync.RWMutex
-	maxSamples    int
+	samples    []MetricsSample
+	samplesMu  sync.RWMutex
+	maxSamples int
 }
 
 // MetricsSample represents a point-in-time metrics sample
@@ -76,7 +76,7 @@ func (mc *MetricsCollector) Stop() {
 // collect is the main collection loop
 func (mc *MetricsCollector) collect() {
 	defer mc.wg.Done()
-	
+
 	ticker := time.NewTicker(mc.interval)
 	defer ticker.Stop()
 
@@ -103,7 +103,7 @@ func (mc *MetricsCollector) collectSample() {
 	if mc.profiler != nil {
 		metrics := mc.profiler.GetMetrics()
 		sample.AvgDuration = metrics.AverageDuration
-		
+
 		// Calculate error rate from recent samples
 		if metrics.TotalOperations > 0 {
 			failedOps := float64(0) // This would come from failed operations tracking
@@ -127,7 +127,7 @@ func (mc *MetricsCollector) collectCPUUsage() float64 {
 	// In production, you'd use more sophisticated methods
 	var rusage runtime.MemStats
 	runtime.ReadMemStats(&rusage)
-	
+
 	now := time.Now()
 	if !mc.lastCPUTime.IsZero() {
 		elapsed := now.Sub(mc.lastCPUTime).Seconds()
@@ -138,7 +138,7 @@ func (mc *MetricsCollector) collectCPUUsage() float64 {
 			mc.lastCPUUsage = cpuPercent
 		}
 	}
-	
+
 	mc.lastCPUTime = now
 	return mc.lastCPUUsage
 }
@@ -160,7 +160,7 @@ func (mc *MetricsCollector) storeSample(sample MetricsSample) {
 		// Remove oldest sample
 		mc.samples = mc.samples[1:]
 	}
-	
+
 	mc.samples = append(mc.samples, sample)
 }
 
@@ -208,11 +208,11 @@ func (mc *MetricsCollector) GetAverageMetrics(window time.Duration) *AverageMetr
 
 	cutoff := time.Now().Add(-window)
 	var (
-		count         int
-		totalCPU      float64
-		totalMemory   float64
+		count           int
+		totalCPU        float64
+		totalMemory     float64
 		totalGoroutines int
-		totalDuration time.Duration
+		totalDuration   time.Duration
 	)
 
 	for _, sample := range mc.samples {
@@ -230,12 +230,12 @@ func (mc *MetricsCollector) GetAverageMetrics(window time.Duration) *AverageMetr
 	}
 
 	return &AverageMetrics{
-		Window:       window,
-		SampleCount:  count,
-		AvgCPU:       totalCPU / float64(count),
-		AvgMemoryMB:  totalMemory / float64(count),
+		Window:        window,
+		SampleCount:   count,
+		AvgCPU:        totalCPU / float64(count),
+		AvgMemoryMB:   totalMemory / float64(count),
 		AvgGoroutines: totalGoroutines / count,
-		AvgDuration:  totalDuration / time.Duration(count),
+		AvgDuration:   totalDuration / time.Duration(count),
 	}
 }
 
@@ -280,17 +280,17 @@ func (mc *MetricsCollector) GetTrend(metric string, window time.Duration) *Metri
 
 	// Calculate trend (simple linear regression)
 	trend := calculateLinearTrend(timestamps, values)
-	
+
 	return &MetricTrend{
-		Metric:      metric,
-		Window:      window,
-		DataPoints:  len(values),
-		Slope:       trend.Slope,
-		Direction:   trend.Direction,
-		StartValue:  values[0],
-		EndValue:    values[len(values)-1],
-		MinValue:    findMin(values),
-		MaxValue:    findMax(values),
+		Metric:     metric,
+		Window:     window,
+		DataPoints: len(values),
+		Slope:      trend.Slope,
+		Direction:  trend.Direction,
+		StartValue: values[0],
+		EndValue:   values[len(values)-1],
+		MinValue:   findMin(values),
+		MaxValue:   findMax(values),
 	}
 }
 
@@ -303,10 +303,10 @@ func (mc *MetricsCollector) IsHealthy() bool {
 
 	// Define health thresholds
 	const (
-		maxCPUPercent    = 80.0
-		maxMemoryMB      = 500.0
-		maxGoroutines    = 1000
-		maxErrorRate     = 0.1
+		maxCPUPercent = 80.0
+		maxMemoryMB   = 500.0
+		maxGoroutines = 1000
+		maxErrorRate  = 0.1
 	)
 
 	return latest.CPUPercent < maxCPUPercent &&
@@ -319,7 +319,7 @@ func (mc *MetricsCollector) IsHealthy() bool {
 func (mc *MetricsCollector) Reset() {
 	mc.samplesMu.Lock()
 	defer mc.samplesMu.Unlock()
-	
+
 	mc.samples = make([]MetricsSample, 0, mc.maxSamples)
 	mc.lastCPUTime = time.Time{}
 	mc.lastCPUUsage = 0
@@ -370,7 +370,7 @@ func calculateLinearTrend(timestamps []time.Time, values []float64) TrendAnalysi
 	// Calculate linear regression
 	n := float64(len(values))
 	var sumX, sumY, sumXY, sumX2 float64
-	
+
 	for i := range values {
 		sumX += xValues[i]
 		sumY += values[i]
@@ -380,7 +380,7 @@ func calculateLinearTrend(timestamps []time.Time, values []float64) TrendAnalysi
 
 	// Calculate slope
 	slope := (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX)
-	
+
 	// Determine direction
 	direction := "stable"
 	if slope > 0.01 {
@@ -400,7 +400,7 @@ func findMin(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
-	
+
 	min := values[0]
 	for _, v := range values[1:] {
 		if v < min {
@@ -415,7 +415,7 @@ func findMax(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
-	
+
 	max := values[0]
 	for _, v := range values[1:] {
 		if v > max {

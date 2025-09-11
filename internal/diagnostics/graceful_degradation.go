@@ -33,7 +33,7 @@
 //       EnableAutoDetection: true,
 //       DefaultLevel: DegradationNormal,
 //   })
-//   
+//
 //   level := degradation.GetCurrentLevel()
 //   checks := degradation.FilterChecks(allChecks, level)
 
@@ -51,13 +51,13 @@ type DegradationLevel int
 const (
 	// DegradationNormal indicates full diagnostic capabilities are available
 	DegradationNormal DegradationLevel = iota
-	
+
 	// DegradationReduced indicates limited diagnostics with non-essential checks disabled
 	DegradationReduced
-	
+
 	// DegradationMinimal indicates only critical connectivity checks are enabled
 	DegradationMinimal
-	
+
 	// DegradationEmergency indicates basic health checks only, resource-conserving mode
 	DegradationEmergency
 )
@@ -87,56 +87,59 @@ func (dl DegradationLevel) String() string {
 //
 // Thread Safety: GracefulDegradation is safe for concurrent use.
 type GracefulDegradation struct {
-	config  *DegradationConfig
-	
+	config *DegradationConfig
+
 	// Current state
 	currentLevel      DegradationLevel
 	lastLevelChange   time.Time
 	degradationReason string
-	
+
 	// Health monitoring
-	healthIndicators  map[string]*HealthIndicator
-	thresholds        map[DegradationLevel]*DegradationThresholds
-	
+	healthIndicators map[string]*HealthIndicator
+	thresholds       map[DegradationLevel]*DegradationThresholds
+
 	// Statistics and history
-	levelHistory      []LevelTransition
-	metrics          *DegradationMetrics
-	
+	levelHistory []LevelTransition
+	metrics      *DegradationMetrics
+
 	// Control
-	manualOverride   *DegradationLevel // Manual override if set
-	autoDetection    bool
-	
+	manualOverride *DegradationLevel // Manual override if set
+	autoDetection  bool
+
 	// Thread safety
 	mu sync.RWMutex
+
+	// Shutdown control
+	stopCh chan struct{}
 }
 
 // DegradationConfig defines behavior and thresholds for graceful degradation
 type DegradationConfig struct {
 	// Basic configuration
-	EnableAutoDetection  bool             // Enable automatic degradation detection
-	DefaultLevel        DegradationLevel  // Starting degradation level
-	ManualOverrideAllowed bool           // Allow manual degradation control
-	
+	EnableAutoDetection   bool             // Enable automatic degradation detection
+	DefaultLevel          DegradationLevel // Starting degradation level
+	ManualOverrideAllowed bool             // Allow manual degradation control
+
 	// Auto-detection settings
-	HealthCheckInterval  time.Duration    // How often to check system health
-	RecoveryCheckInterval time.Duration   // How often to check for recovery
-	StabilityPeriod      time.Duration    // Time to wait before level changes
-	
+	HealthCheckInterval   time.Duration // How often to check system health
+	RecoveryCheckInterval time.Duration // How often to check for recovery
+	StabilityPeriod       time.Duration // Time to wait before level changes
+
 	// Thresholds for different levels
-	ErrorRateThresholds  map[DegradationLevel]float64 // Error rate thresholds
-	ResourceThresholds   map[DegradationLevel]*ResourceThresholds
+	ErrorRateThresholds    map[DegradationLevel]float64 // Error rate thresholds
+	ResourceThresholds     map[DegradationLevel]*ResourceThresholds
 	ResponseTimeThresholds map[DegradationLevel]time.Duration
-	
+
 	// Recovery settings
-	EnableAutoRecovery   bool             // Allow automatic level improvement
+	EnableAutoRecovery      bool          // Allow automatic level improvement
 	RecoveryStabilityPeriod time.Duration // Time of stable operation before recovery
-	ConservativeRecovery bool             // Use conservative recovery approach
+	ConservativeRecovery    bool          // Use conservative recovery approach
 }
 
 // ResourceThresholds define resource usage limits for degradation triggers
 type ResourceThresholds struct {
 	MaxCPUPercent    float64 // Maximum CPU usage percentage
-	MaxMemoryPercent float64 // Maximum memory usage percentage  
+	MaxMemoryPercent float64 // Maximum memory usage percentage
 	MaxDiskPercent   float64 // Maximum disk usage percentage
 	MaxOpenFiles     int     // Maximum open file descriptors
 	MaxConnections   int     // Maximum concurrent connections
@@ -144,13 +147,13 @@ type ResourceThresholds struct {
 
 // HealthIndicator tracks a specific aspect of system health
 type HealthIndicator struct {
-	Name         string              `json:"name"`
-	Value        float64             `json:"value"`
-	Threshold    float64             `json:"threshold"`
-	Critical     bool                `json:"critical"`
-	LastUpdated  time.Time           `json:"last_updated"`
-	Trend        HealthTrend         `json:"trend"`
-	Description  string              `json:"description"`
+	Name        string      `json:"name"`
+	Value       float64     `json:"value"`
+	Threshold   float64     `json:"threshold"`
+	Critical    bool        `json:"critical"`
+	LastUpdated time.Time   `json:"last_updated"`
+	Trend       HealthTrend `json:"trend"`
+	Description string      `json:"description"`
 }
 
 // HealthTrend indicates the direction of change for a health indicator
@@ -186,27 +189,27 @@ type LevelTransition struct {
 // DegradationMetrics tracks degradation system performance and behavior
 type DegradationMetrics struct {
 	// Current state
-	CurrentLevel        DegradationLevel `json:"current_level"`
-	TimeInCurrentLevel  time.Duration    `json:"time_in_current_level"`
-	LastLevelChange     time.Time        `json:"last_level_change"`
-	
+	CurrentLevel       DegradationLevel `json:"current_level"`
+	TimeInCurrentLevel time.Duration    `json:"time_in_current_level"`
+	LastLevelChange    time.Time        `json:"last_level_change"`
+
 	// Level distribution
-	TimeInEachLevel     map[DegradationLevel]time.Duration `json:"time_in_each_level"`
-	TransitionsCount    map[string]int64                   `json:"transitions_count"` // from_level->to_level
-	
+	TimeInEachLevel  map[DegradationLevel]time.Duration `json:"time_in_each_level"`
+	TransitionsCount map[string]int64                   `json:"transitions_count"` // from_level->to_level
+
 	// Health indicators
-	OverallHealthScore  float64                            `json:"overall_health_score"`
-	HealthIndicators    map[string]*HealthIndicator        `json:"health_indicators"`
-	
+	OverallHealthScore float64                     `json:"overall_health_score"`
+	HealthIndicators   map[string]*HealthIndicator `json:"health_indicators"`
+
 	// Performance impact
-	ChecksSkipped       int64                              `json:"checks_skipped"`
-	ChecksExecuted      int64                              `json:"checks_executed"`
-	ResourcesSaved      map[string]float64                 `json:"resources_saved"`
-	
+	ChecksSkipped  int64              `json:"checks_skipped"`
+	ChecksExecuted int64              `json:"checks_executed"`
+	ResourcesSaved map[string]float64 `json:"resources_saved"`
+
 	// Recovery statistics
-	AutoRecoveries      int64                              `json:"auto_recoveries"`
-	ManualOverrides     int64                              `json:"manual_overrides"`
-	FailedRecoveries    int64                              `json:"failed_recoveries"`
+	AutoRecoveries   int64 `json:"auto_recoveries"`
+	ManualOverrides  int64 `json:"manual_overrides"`
+	FailedRecoveries int64 `json:"failed_recoveries"`
 }
 
 // CheckPriority defines the importance level of diagnostic checks
@@ -214,20 +217,20 @@ type CheckPriority int
 
 const (
 	CheckPriorityCritical CheckPriority = iota // Essential connectivity checks
-	CheckPriorityHigh                         // Important network diagnostics
-	CheckPriorityMedium                       // Standard diagnostic checks
-	CheckPriorityLow                          // Optional/informational checks
+	CheckPriorityHigh                          // Important network diagnostics
+	CheckPriorityMedium                        // Standard diagnostic checks
+	CheckPriorityLow                           // Optional/informational checks
 )
 
 // CheckRequirements defines resource requirements for diagnostic checks
 type CheckRequirements struct {
-	Priority           CheckPriority     `json:"priority"`
-	EstimatedDuration  time.Duration     `json:"estimated_duration"`
-	MemoryRequirement  int64            `json:"memory_requirement"`
-	NetworkRequired    bool             `json:"network_required"`
-	DockerAPIRequired  bool             `json:"docker_api_required"`
-	ContainerAccess    bool             `json:"container_access"`
-	Tags              []string          `json:"tags"`
+	Priority          CheckPriority `json:"priority"`
+	EstimatedDuration time.Duration `json:"estimated_duration"`
+	MemoryRequirement int64         `json:"memory_requirement"`
+	NetworkRequired   bool          `json:"network_required"`
+	DockerAPIRequired bool          `json:"docker_api_required"`
+	ContainerAccess   bool          `json:"container_access"`
+	Tags              []string      `json:"tags"`
 }
 
 // NewGracefulDegradation creates a new graceful degradation system
@@ -235,14 +238,14 @@ func NewGracefulDegradation(config *DegradationConfig) *GracefulDegradation {
 	if config == nil {
 		config = &DegradationConfig{
 			EnableAutoDetection:     true,
-			DefaultLevel:           DegradationNormal,
-			ManualOverrideAllowed:  true,
-			HealthCheckInterval:    30 * time.Second,
-			RecoveryCheckInterval:  60 * time.Second,
-			StabilityPeriod:       5 * time.Minute,
-			EnableAutoRecovery:     true,
+			DefaultLevel:            DegradationNormal,
+			ManualOverrideAllowed:   true,
+			HealthCheckInterval:     30 * time.Second,
+			RecoveryCheckInterval:   60 * time.Second,
+			StabilityPeriod:         5 * time.Minute,
+			EnableAutoRecovery:      true,
 			RecoveryStabilityPeriod: 10 * time.Minute,
-			ConservativeRecovery:   true,
+			ConservativeRecovery:    true,
 		}
 	}
 
@@ -265,6 +268,20 @@ func NewGracefulDegradation(config *DegradationConfig) *GracefulDegradation {
 		}
 	}
 
+	// Ensure critical timing values are never zero to prevent panics
+	if config.HealthCheckInterval <= 0 {
+		config.HealthCheckInterval = 30 * time.Second
+	}
+	if config.RecoveryCheckInterval <= 0 {
+		config.RecoveryCheckInterval = 60 * time.Second
+	}
+	if config.StabilityPeriod <= 0 {
+		config.StabilityPeriod = 5 * time.Minute
+	}
+	if config.RecoveryStabilityPeriod <= 0 {
+		config.RecoveryStabilityPeriod = 10 * time.Minute
+	}
+
 	gd := &GracefulDegradation{
 		config:           config,
 		currentLevel:     config.DefaultLevel,
@@ -273,6 +290,7 @@ func NewGracefulDegradation(config *DegradationConfig) *GracefulDegradation {
 		thresholds:       make(map[DegradationLevel]*DegradationThresholds),
 		levelHistory:     make([]LevelTransition, 0),
 		autoDetection:    config.EnableAutoDetection,
+		stopCh:           make(chan struct{}),
 		metrics: &DegradationMetrics{
 			CurrentLevel:     config.DefaultLevel,
 			TimeInEachLevel:  make(map[DegradationLevel]time.Duration),
@@ -300,13 +318,24 @@ func NewGracefulDegradation(config *DegradationConfig) *GracefulDegradation {
 func (gd *GracefulDegradation) GetCurrentLevel() DegradationLevel {
 	gd.mu.RLock()
 	defer gd.mu.RUnlock()
-	
+
 	// Manual override takes precedence
 	if gd.manualOverride != nil {
 		return *gd.manualOverride
 	}
-	
+
 	return gd.currentLevel
+}
+
+// Stop gracefully shuts down the health monitoring goroutine
+func (gd *GracefulDegradation) Stop() {
+	select {
+	case <-gd.stopCh:
+		// Already stopped
+		return
+	default:
+		close(gd.stopCh)
+	}
 }
 
 // SetManualLevel manually sets the degradation level, overriding automatic detection
@@ -320,7 +349,7 @@ func (gd *GracefulDegradation) SetManualLevel(level DegradationLevel, reason str
 
 	oldLevel := gd.GetCurrentLevel()
 	gd.manualOverride = &level
-	
+
 	// Record transition
 	transition := LevelTransition{
 		FromLevel:   oldLevel,
@@ -330,10 +359,10 @@ func (gd *GracefulDegradation) SetManualLevel(level DegradationLevel, reason str
 		Automatic:   false,
 		HealthScore: gd.calculateHealthScore(),
 	}
-	
+
 	gd.recordTransition(transition)
 	gd.metrics.ManualOverrides++
-	
+
 	return nil
 }
 
@@ -341,11 +370,11 @@ func (gd *GracefulDegradation) SetManualLevel(level DegradationLevel, reason str
 func (gd *GracefulDegradation) ClearManualOverride() {
 	gd.mu.Lock()
 	defer gd.mu.Unlock()
-	
+
 	if gd.manualOverride != nil {
 		oldLevel := *gd.manualOverride
 		gd.manualOverride = nil
-		
+
 		// Check if automatic level would be different
 		newLevel := gd.determineAppropriateLevel()
 		if newLevel != oldLevel {
@@ -357,7 +386,7 @@ func (gd *GracefulDegradation) ClearManualOverride() {
 				Automatic:   true,
 				HealthScore: gd.calculateHealthScore(),
 			}
-			
+
 			gd.currentLevel = newLevel
 			gd.recordTransition(transition)
 		}
@@ -376,7 +405,7 @@ func (gd *GracefulDegradation) FilterChecks(checks []Check) []Check {
 			gd.metrics.ChecksSkipped++
 		}
 	}
-	
+
 	gd.metrics.ChecksExecuted += int64(len(filteredChecks))
 	return filteredChecks
 }
@@ -385,29 +414,29 @@ func (gd *GracefulDegradation) FilterChecks(checks []Check) []Check {
 func (gd *GracefulDegradation) shouldExecuteCheck(check Check, level DegradationLevel) bool {
 	// Get check requirements (this would need to be implemented by checks)
 	// For now, we'll use check name and severity as indicators
-	
+
 	checkName := check.Name()
 	severity := check.Severity()
-	
+
 	switch level {
 	case DegradationNormal:
 		return true // All checks allowed
-		
+
 	case DegradationReduced:
 		// Skip low-priority checks
 		if gd.isLowPriorityCheck(checkName) {
 			return false
 		}
 		return true
-		
+
 	case DegradationMinimal:
 		// Only critical and high-priority checks
 		return severity == SeverityCritical || gd.isCriticalCheck(checkName)
-		
+
 	case DegradationEmergency:
 		// Only essential connectivity checks
 		return gd.isEssentialCheck(checkName)
-		
+
 	default:
 		return false
 	}
@@ -417,17 +446,17 @@ func (gd *GracefulDegradation) shouldExecuteCheck(check Check, level Degradation
 func (gd *GracefulDegradation) UpdateHealthIndicator(name string, value float64) {
 	gd.mu.Lock()
 	defer gd.mu.Unlock()
-	
+
 	indicator, exists := gd.healthIndicators[name]
 	if !exists {
 		return // Indicator not registered
 	}
-	
+
 	// Calculate trend
 	oldValue := indicator.Value
 	indicator.Value = value
 	indicator.LastUpdated = time.Now()
-	
+
 	if value > oldValue*1.1 {
 		indicator.Trend = TrendDegrading
 	} else if value < oldValue*0.9 {
@@ -435,7 +464,7 @@ func (gd *GracefulDegradation) UpdateHealthIndicator(name string, value float64)
 	} else {
 		indicator.Trend = TrendStable
 	}
-	
+
 	// Check if critical threshold crossed
 	if value >= indicator.Threshold {
 		indicator.Critical = true
@@ -451,51 +480,51 @@ func (gd *GracefulDegradation) UpdateHealthIndicator(name string, value float64)
 func (gd *GracefulDegradation) GetDegradationStatus() DegradationStatus {
 	gd.mu.RLock()
 	defer gd.mu.RUnlock()
-	
+
 	level := gd.GetCurrentLevel()
 	healthScore := gd.calculateHealthScore()
-	
+
 	return DegradationStatus{
-		Level:       level,
-		Reason:      gd.degradationReason,
-		HealthScore: healthScore,
-		IsHealthy:   healthScore > 0.7,
-		Automatic:   gd.manualOverride == nil,
-		TimeInLevel: time.Since(gd.lastLevelChange),
-		Indicators:  gd.getHealthSummary(),
+		Level:        level,
+		Reason:       gd.degradationReason,
+		HealthScore:  healthScore,
+		IsHealthy:    healthScore > 0.7,
+		Automatic:    gd.manualOverride == nil,
+		TimeInLevel:  time.Since(gd.lastLevelChange),
+		Indicators:   gd.getHealthSummary(),
 		Capabilities: gd.getCapabilitiesDescription(level),
 	}
 }
 
 // DegradationStatus provides comprehensive status information
 type DegradationStatus struct {
-	Level        DegradationLevel                   `json:"level"`
-	Reason       string                            `json:"reason"`
-	HealthScore  float64                           `json:"health_score"`
-	IsHealthy    bool                              `json:"is_healthy"`
-	Automatic    bool                              `json:"automatic"`
-	TimeInLevel  time.Duration                     `json:"time_in_level"`
-	Indicators   map[string]*HealthIndicator       `json:"indicators"`
-	Capabilities map[string]bool                   `json:"capabilities"`
+	Level        DegradationLevel            `json:"level"`
+	Reason       string                      `json:"reason"`
+	HealthScore  float64                     `json:"health_score"`
+	IsHealthy    bool                        `json:"is_healthy"`
+	Automatic    bool                        `json:"automatic"`
+	TimeInLevel  time.Duration               `json:"time_in_level"`
+	Indicators   map[string]*HealthIndicator `json:"indicators"`
+	Capabilities map[string]bool             `json:"capabilities"`
 }
 
 // GetMetrics returns comprehensive degradation system metrics
 func (gd *GracefulDegradation) GetMetrics() DegradationMetrics {
 	gd.mu.RLock()
 	defer gd.mu.RUnlock()
-	
+
 	// Update time-based metrics
 	now := time.Now()
 	gd.metrics.TimeInCurrentLevel = now.Sub(gd.lastLevelChange)
 	gd.metrics.OverallHealthScore = gd.calculateHealthScore()
-	
+
 	// Copy health indicators
 	gd.metrics.HealthIndicators = make(map[string]*HealthIndicator)
 	for k, v := range gd.healthIndicators {
 		indicatorCopy := *v
 		gd.metrics.HealthIndicators[k] = &indicatorCopy
 	}
-	
+
 	// Return copy to prevent external modification
 	metrics := *gd.metrics
 	return metrics
@@ -512,7 +541,7 @@ func (gd *GracefulDegradation) initializeThresholds() {
 		ConnectionFailures:  2,
 		ConsecutiveFailures: 3,
 	}
-	
+
 	gd.thresholds[DegradationReduced] = &DegradationThresholds{
 		ErrorRate:           0.15,
 		ResponseTime:        5 * time.Second,
@@ -521,7 +550,7 @@ func (gd *GracefulDegradation) initializeThresholds() {
 		ConnectionFailures:  5,
 		ConsecutiveFailures: 5,
 	}
-	
+
 	gd.thresholds[DegradationMinimal] = &DegradationThresholds{
 		ErrorRate:           0.30,
 		ResponseTime:        10 * time.Second,
@@ -530,7 +559,7 @@ func (gd *GracefulDegradation) initializeThresholds() {
 		ConnectionFailures:  10,
 		ConsecutiveFailures: 8,
 	}
-	
+
 	gd.thresholds[DegradationEmergency] = &DegradationThresholds{
 		ErrorRate:           0.50,
 		ResponseTime:        30 * time.Second,
@@ -569,7 +598,7 @@ func (gd *GracefulDegradation) initializeHealthIndicators() {
 			Description: "Circuit breaker system health (0-1)",
 		},
 	}
-	
+
 	for _, indicator := range indicators {
 		indicator.LastUpdated = time.Now()
 		indicator.Trend = TrendStable
@@ -580,11 +609,13 @@ func (gd *GracefulDegradation) initializeHealthIndicators() {
 func (gd *GracefulDegradation) healthMonitoringLoop() {
 	ticker := time.NewTicker(gd.config.HealthCheckInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
 			gd.performHealthCheck()
+		case <-gd.stopCh:
+			return
 		}
 	}
 }
@@ -592,22 +623,22 @@ func (gd *GracefulDegradation) healthMonitoringLoop() {
 func (gd *GracefulDegradation) performHealthCheck() {
 	gd.mu.Lock()
 	defer gd.mu.Unlock()
-	
+
 	// Skip if manual override is active
 	if gd.manualOverride != nil {
 		return
 	}
-	
+
 	// Determine appropriate level based on current health
 	appropriateLevel := gd.determineAppropriateLevel()
-	
+
 	// Check if level change is needed
 	if appropriateLevel != gd.currentLevel {
 		// Apply stability period to prevent flapping
 		if time.Since(gd.lastLevelChange) < gd.config.StabilityPeriod {
 			return // Too soon to change levels
 		}
-		
+
 		// Change level
 		gd.changeDegradationLevel(appropriateLevel, gd.generateLevelChangeReason(appropriateLevel))
 	}
@@ -615,7 +646,7 @@ func (gd *GracefulDegradation) performHealthCheck() {
 
 func (gd *GracefulDegradation) determineAppropriateLevel() DegradationLevel {
 	healthScore := gd.calculateHealthScore()
-	
+
 	// Determine level based on health score and specific indicators
 	if healthScore >= 0.8 && gd.allIndicatorsHealthy() {
 		return DegradationNormal
@@ -632,10 +663,10 @@ func (gd *GracefulDegradation) calculateHealthScore() float64 {
 	if len(gd.healthIndicators) == 0 {
 		return 1.0 // No indicators, assume healthy
 	}
-	
+
 	totalScore := 0.0
 	totalWeight := 0.0
-	
+
 	for _, indicator := range gd.healthIndicators {
 		// Calculate health score for this indicator (0-1, where 1 is healthy)
 		indicatorScore := 1.0
@@ -653,21 +684,21 @@ func (gd *GracefulDegradation) calculateHealthScore() float64 {
 				indicatorScore = 0.0
 			}
 		}
-		
+
 		// Weight critical indicators higher
 		weight := 1.0
 		if indicator.Critical {
 			weight = 2.0
 		}
-		
+
 		totalScore += indicatorScore * weight
 		totalWeight += weight
 	}
-	
+
 	if totalWeight == 0 {
 		return 1.0
 	}
-	
+
 	return totalScore / totalWeight
 }
 
@@ -682,7 +713,7 @@ func (gd *GracefulDegradation) allIndicatorsHealthy() bool {
 
 func (gd *GracefulDegradation) criticalIndicatorsHealthy() bool {
 	criticalIndicators := []string{"docker_connectivity", "error_rate"}
-	
+
 	for _, name := range criticalIndicators {
 		if indicator, exists := gd.healthIndicators[name]; exists {
 			if indicator.Critical || indicator.Value >= indicator.Threshold {
@@ -698,7 +729,7 @@ func (gd *GracefulDegradation) changeDegradationLevel(newLevel DegradationLevel,
 	gd.currentLevel = newLevel
 	gd.lastLevelChange = time.Now()
 	gd.degradationReason = reason
-	
+
 	transition := LevelTransition{
 		FromLevel:   oldLevel,
 		ToLevel:     newLevel,
@@ -707,9 +738,9 @@ func (gd *GracefulDegradation) changeDegradationLevel(newLevel DegradationLevel,
 		Automatic:   true,
 		HealthScore: gd.calculateHealthScore(),
 	}
-	
+
 	gd.recordTransition(transition)
-	
+
 	// Update metrics
 	if newLevel > oldLevel {
 		gd.metrics.AutoRecoveries++
@@ -718,13 +749,13 @@ func (gd *GracefulDegradation) changeDegradationLevel(newLevel DegradationLevel,
 
 func (gd *GracefulDegradation) recordTransition(transition LevelTransition) {
 	gd.levelHistory = append(gd.levelHistory, transition)
-	
+
 	// Limit history size
 	maxHistory := 100
 	if len(gd.levelHistory) > maxHistory {
 		gd.levelHistory = gd.levelHistory[len(gd.levelHistory)-maxHistory:]
 	}
-	
+
 	// Update transition counts
 	transitionKey := fmt.Sprintf("%s->%s", transition.FromLevel.String(), transition.ToLevel.String())
 	gd.metrics.TransitionsCount[transitionKey]++
@@ -733,17 +764,17 @@ func (gd *GracefulDegradation) recordTransition(transition LevelTransition) {
 func (gd *GracefulDegradation) generateLevelChangeReason(newLevel DegradationLevel) string {
 	healthScore := gd.calculateHealthScore()
 	criticalIndicators := make([]string, 0)
-	
+
 	for name, indicator := range gd.healthIndicators {
 		if indicator.Critical {
 			criticalIndicators = append(criticalIndicators, name)
 		}
 	}
-	
+
 	if len(criticalIndicators) > 0 {
 		return fmt.Sprintf("Health score %.2f, critical indicators: %v", healthScore, criticalIndicators)
 	}
-	
+
 	return fmt.Sprintf("Health score %.2f, automatic level adjustment", healthScore)
 }
 
@@ -752,9 +783,9 @@ func (gd *GracefulDegradation) generateLevelChangeReason(newLevel DegradationLev
 func (gd *GracefulDegradation) isLowPriorityCheck(checkName string) bool {
 	lowPriorityChecks := []string{
 		"subnet_overlap",
-		"mtu_consistency", 
+		"mtu_consistency",
 	}
-	
+
 	for _, lowPriority := range lowPriorityChecks {
 		if checkName == lowPriority {
 			return true
@@ -769,7 +800,7 @@ func (gd *GracefulDegradation) isCriticalCheck(checkName string) bool {
 		"bridge_network",
 		"dns_resolution",
 	}
-	
+
 	for _, critical := range criticalChecks {
 		if checkName == critical {
 			return true
@@ -782,7 +813,7 @@ func (gd *GracefulDegradation) isEssentialCheck(checkName string) bool {
 	essentialChecks := []string{
 		"daemon_connectivity",
 	}
-	
+
 	for _, essential := range essentialChecks {
 		if checkName == essential {
 			return true
@@ -802,32 +833,32 @@ func (gd *GracefulDegradation) getHealthSummary() map[string]*HealthIndicator {
 
 func (gd *GracefulDegradation) getCapabilitiesDescription(level DegradationLevel) map[string]bool {
 	capabilities := make(map[string]bool)
-	
+
 	switch level {
 	case DegradationNormal:
 		capabilities["full_diagnostics"] = true
 		capabilities["container_exec"] = true
 		capabilities["network_analysis"] = true
 		capabilities["performance_tests"] = true
-		
+
 	case DegradationReduced:
 		capabilities["full_diagnostics"] = false
 		capabilities["container_exec"] = true
 		capabilities["network_analysis"] = true
 		capabilities["performance_tests"] = false
-		
+
 	case DegradationMinimal:
 		capabilities["full_diagnostics"] = false
 		capabilities["container_exec"] = false
 		capabilities["network_analysis"] = true
 		capabilities["performance_tests"] = false
-		
+
 	case DegradationEmergency:
 		capabilities["full_diagnostics"] = false
 		capabilities["container_exec"] = false
 		capabilities["network_analysis"] = false
 		capabilities["performance_tests"] = false
 	}
-	
+
 	return capabilities
 }

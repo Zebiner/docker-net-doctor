@@ -15,58 +15,58 @@ import (
 
 // ProfilingAccuracy defines the target precision for timing measurements
 const (
-	ProfilingAccuracy      = 1 * time.Millisecond  // 1ms target accuracy
-	ProfilingOverheadLimit = 0.05                  // 5% maximum overhead
+	ProfilingAccuracy      = 1 * time.Millisecond   // 1ms target accuracy
+	ProfilingOverheadLimit = 0.05                   // 5% maximum overhead
 	SamplingInterval       = 100 * time.Microsecond // High-frequency sampling
-	MaxProfileDataPoints   = 10000                 // Limit memory usage
+	MaxProfileDataPoints   = 10000                  // Limit memory usage
 )
 
 // PerformanceProfiler provides high-precision performance profiling with 1ms accuracy
 type PerformanceProfiler struct {
 	// Core components
-	precision    time.Duration       // Target precision (1ms)
-	measurements *TimingStorage      // Thread-safe timing storage
-	metrics      *ProfileMetrics     // Aggregated statistics
-	collector    *MetricsCollector   // Real-time collection
-	reporter     *ProfileReporter    // Output formatting
+	precision    time.Duration     // Target precision (1ms)
+	measurements *TimingStorage    // Thread-safe timing storage
+	metrics      *ProfileMetrics   // Aggregated statistics
+	collector    *MetricsCollector // Real-time collection
+	reporter     *ProfileReporter  // Output formatting
 
 	// Integration points
-	workerPool   *SecureWorkerPool   // Worker pool integration
-	dockerClient *docker.Client      // Docker client integration
-	engine       *DiagnosticEngine   // Engine integration
+	workerPool   *SecureWorkerPool // Worker pool integration
+	dockerClient *docker.Client    // Docker client integration
+	engine       *DiagnosticEngine // Engine integration
 
 	// State management
-	enabled      atomic.Bool         // Profiling enabled flag
-	started      atomic.Bool         // Profiler started flag
-	overhead     int64               // Overhead in nanoseconds (use atomic ops)
+	enabled  atomic.Bool // Profiling enabled flag
+	started  atomic.Bool // Profiler started flag
+	overhead int64       // Overhead in nanoseconds (use atomic ops)
 
 	// Configuration
-	config       *ProfileConfig      // Profiler configuration
-	mu           sync.RWMutex        // Protects configuration
+	config *ProfileConfig // Profiler configuration
+	mu     sync.RWMutex   // Protects configuration
 }
 
 // ProfileConfig defines profiler configuration
 type ProfileConfig struct {
-	Enabled           bool                  // Enable profiling
-	Precision         time.Duration         // Target precision (default 1ms)
-	MaxOverhead       float64               // Maximum allowed overhead (default 5%)
-	SamplingRate      time.Duration         // Sampling interval
-	MaxDataPoints     int                   // Maximum stored data points
-	EnableFlameGraph  bool                  // Generate flame graphs
-	EnablePercentiles bool                  // Calculate percentiles
-	EnableTrends      bool                  // Track performance trends
-	RealtimeMetrics   bool                  // Real-time metrics collection
-	DetailLevel       ProfilingDetailLevel  // Level of detail to capture
+	Enabled           bool                 // Enable profiling
+	Precision         time.Duration        // Target precision (default 1ms)
+	MaxOverhead       float64              // Maximum allowed overhead (default 5%)
+	SamplingRate      time.Duration        // Sampling interval
+	MaxDataPoints     int                  // Maximum stored data points
+	EnableFlameGraph  bool                 // Generate flame graphs
+	EnablePercentiles bool                 // Calculate percentiles
+	EnableTrends      bool                 // Track performance trends
+	RealtimeMetrics   bool                 // Real-time metrics collection
+	DetailLevel       ProfilingDetailLevel // Level of detail to capture
 }
 
 // ProfilingDetailLevel defines the granularity of profiling
 type ProfilingDetailLevel int
 
 const (
-	DetailLevelBasic ProfilingDetailLevel = iota  // Basic timing only
-	DetailLevelNormal                              // Normal profiling
-	DetailLevelDetailed                            // Detailed with call stacks
-	DetailLevelFull                                // Full profiling with traces
+	DetailLevelBasic    ProfilingDetailLevel = iota // Basic timing only
+	DetailLevelNormal                               // Normal profiling
+	DetailLevelDetailed                             // Detailed with call stacks
+	DetailLevelFull                                 // Full profiling with traces
 )
 
 // TimingData represents a single timing measurement with high precision
@@ -86,27 +86,27 @@ type TimingData struct {
 
 // ResourceSnapshot captures resource usage at a point in time
 type ResourceSnapshot struct {
-	CPUPercent    float64    // CPU usage percentage
-	MemoryBytes   uint64     // Memory usage in bytes
-	GoroutineNum  int        // Number of goroutines
-	ThreadNum     int        // Number of OS threads
-	Timestamp     time.Time  // Snapshot timestamp
+	CPUPercent   float64   // CPU usage percentage
+	MemoryBytes  uint64    // Memory usage in bytes
+	GoroutineNum int       // Number of goroutines
+	ThreadNum    int       // Number of OS threads
+	Timestamp    time.Time // Snapshot timestamp
 }
 
 // ProfileMetrics contains aggregated profiling statistics
 type ProfileMetrics struct {
-	mu                sync.RWMutex
-	TotalOperations   int64                  // Total operations profiled
-	TotalDuration     time.Duration          // Total execution time
-	AverageDuration   time.Duration          // Average operation duration
-	MinDuration       time.Duration          // Minimum duration
-	MaxDuration       time.Duration          // Maximum duration
-	Percentiles       map[float64]time.Duration // P50, P95, P99
-	CategoryMetrics   map[string]*CategoryMetrics // Per-category metrics
-	CheckMetrics      map[string]*CheckProfileMetrics // Per-check metrics
-	WorkerMetrics     map[int]*WorkerProfileMetrics // Per-worker metrics
-	OverheadNanos     int64                  // Profiling overhead in nanoseconds
-	AccuracyAchieved  time.Duration          // Actual accuracy achieved
+	mu               sync.RWMutex
+	TotalOperations  int64                           // Total operations profiled
+	TotalDuration    time.Duration                   // Total execution time
+	AverageDuration  time.Duration                   // Average operation duration
+	MinDuration      time.Duration                   // Minimum duration
+	MaxDuration      time.Duration                   // Maximum duration
+	Percentiles      map[float64]time.Duration       // P50, P95, P99
+	CategoryMetrics  map[string]*CategoryMetrics     // Per-category metrics
+	CheckMetrics     map[string]*CheckProfileMetrics // Per-check metrics
+	WorkerMetrics    map[int]*WorkerProfileMetrics   // Per-worker metrics
+	OverheadNanos    int64                           // Profiling overhead in nanoseconds
+	AccuracyAchieved time.Duration                   // Actual accuracy achieved
 }
 
 // CategoryMetrics tracks metrics for operation categories
@@ -120,29 +120,29 @@ type CategoryMetrics struct {
 
 // CheckProfileMetrics tracks performance metrics for individual checks
 type CheckProfileMetrics struct {
-	Name              string
-	ExecutionCount    int64
-	TotalDuration     time.Duration
-	AverageDuration   time.Duration
-	MinDuration       time.Duration
-	MaxDuration       time.Duration
-	P50Duration       time.Duration
-	P95Duration       time.Duration
-	P99Duration       time.Duration
-	SuccessRate       float64
-	LastExecution     time.Time
-	ResourceUsage     *ResourceSnapshot
+	Name            string
+	ExecutionCount  int64
+	TotalDuration   time.Duration
+	AverageDuration time.Duration
+	MinDuration     time.Duration
+	MaxDuration     time.Duration
+	P50Duration     time.Duration
+	P95Duration     time.Duration
+	P99Duration     time.Duration
+	SuccessRate     float64
+	LastExecution   time.Time
+	ResourceUsage   *ResourceSnapshot
 }
 
 // WorkerProfileMetrics tracks performance metrics for individual workers
 type WorkerProfileMetrics struct {
-	WorkerID          int
-	JobsProcessed     int64
-	TotalBusyTime     time.Duration
-	TotalIdleTime     time.Duration
-	AverageJobTime    time.Duration
-	Utilization       float64
-	LastJobTime       time.Time
+	WorkerID       int
+	JobsProcessed  int64
+	TotalBusyTime  time.Duration
+	TotalIdleTime  time.Duration
+	AverageJobTime time.Duration
+	Utilization    float64
+	LastJobTime    time.Time
 }
 
 // NewPerformanceProfiler creates a new high-precision performance profiler
@@ -230,10 +230,10 @@ func (p *PerformanceProfiler) ProfileOperation(name string, category string, ope
 
 	// Use high-precision timer
 	timer := profiling.NewPrecisionTimer()
-	
+
 	// Capture pre-execution state
 	preResource := p.captureResourceSnapshot()
-	
+
 	// Start timing with nanosecond precision
 	timer.Start()
 	startTime := time.Now()
@@ -361,7 +361,7 @@ func (p *PerformanceProfiler) captureBaseline() {
 
 	snapshot := p.captureResourceSnapshot()
 	p.metrics.CategoryMetrics["baseline"] = &CategoryMetrics{
-		Count:     1,
+		Count:       1,
 		MinDuration: time.Duration(snapshot.MemoryBytes), // Store memory as baseline
 	}
 }
@@ -392,14 +392,14 @@ func (p *PerformanceProfiler) captureCallStack(skip int) []string {
 	const maxDepth = 32
 	pc := make([]uintptr, maxDepth)
 	n := runtime.Callers(skip+1, pc)
-	
+
 	if n == 0 {
 		return nil
 	}
 
 	pc = pc[:n]
 	frames := runtime.CallersFrames(pc)
-	
+
 	stack := make([]string, 0, n)
 	for {
 		frame, more := frames.Next()
@@ -408,7 +408,7 @@ func (p *PerformanceProfiler) captureCallStack(skip int) []string {
 			break
 		}
 	}
-	
+
 	return stack
 }
 
@@ -442,7 +442,7 @@ func (p *PerformanceProfiler) updateMetrics(timing *TimingData) {
 	category.Count++
 	category.TotalDuration += timing.Duration
 	category.AverageDuration = category.TotalDuration / time.Duration(category.Count)
-	
+
 	if category.MinDuration == 0 || timing.Duration < category.MinDuration {
 		category.MinDuration = timing.Duration
 	}
@@ -466,7 +466,7 @@ func (p *PerformanceProfiler) updateCheckMetrics(checkName string, success bool)
 
 	metrics.ExecutionCount++
 	metrics.LastExecution = time.Now()
-	
+
 	if success {
 		metrics.SuccessRate = (metrics.SuccessRate*float64(metrics.ExecutionCount-1) + 1.0) / float64(metrics.ExecutionCount)
 	} else {
@@ -557,38 +557,52 @@ func (p *PerformanceProfiler) calculateAccuracyAchieved() time.Duration {
 }
 
 // GetMetrics returns current profiling metrics
-func (p *PerformanceProfiler) GetMetrics() ProfileMetrics {
+func (p *PerformanceProfiler) GetMetrics() *ProfileMetrics {
 	p.metrics.mu.RLock()
 	defer p.metrics.mu.RUnlock()
-	
-	// Create a copy to avoid race conditions
-	metrics := *p.metrics
-	
-	// Deep copy maps
-	metrics.CategoryMetrics = make(map[string]*CategoryMetrics)
-	for k, v := range p.metrics.CategoryMetrics {
-		catCopy := *v
-		metrics.CategoryMetrics[k] = &catCopy
+
+	// Create a copy without the mutex to avoid lock copying
+	return &ProfileMetrics{
+		TotalOperations: p.metrics.TotalOperations,
+		TotalDuration:   p.metrics.TotalDuration,
+		AverageDuration: p.metrics.AverageDuration,
+		MinDuration:     p.metrics.MinDuration,
+		MaxDuration:     p.metrics.MaxDuration,
+		Percentiles: func() map[float64]time.Duration {
+			percentiles := make(map[float64]time.Duration)
+			for k, v := range p.metrics.Percentiles {
+				percentiles[k] = v
+			}
+			return percentiles
+		}(),
+		CategoryMetrics: func() map[string]*CategoryMetrics {
+			categoryMetrics := make(map[string]*CategoryMetrics)
+			for k, v := range p.metrics.CategoryMetrics {
+				catCopy := *v
+				categoryMetrics[k] = &catCopy
+			}
+			return categoryMetrics
+		}(),
+		CheckMetrics: func() map[string]*CheckProfileMetrics {
+			checkMetrics := make(map[string]*CheckProfileMetrics)
+			for k, v := range p.metrics.CheckMetrics {
+				checkCopy := *v
+				checkMetrics[k] = &checkCopy
+			}
+			return checkMetrics
+		}(),
+		WorkerMetrics: func() map[int]*WorkerProfileMetrics {
+			workerMetrics := make(map[int]*WorkerProfileMetrics)
+			for k, v := range p.metrics.WorkerMetrics {
+				workerCopy := *v
+				workerMetrics[k] = &workerCopy
+			}
+			return workerMetrics
+		}(),
+		OverheadNanos:    p.metrics.OverheadNanos,
+		AccuracyAchieved: p.metrics.AccuracyAchieved,
+		// Deliberately omit mu field to avoid copying mutex
 	}
-	
-	metrics.CheckMetrics = make(map[string]*CheckProfileMetrics)
-	for k, v := range p.metrics.CheckMetrics {
-		checkCopy := *v
-		metrics.CheckMetrics[k] = &checkCopy
-	}
-	
-	metrics.WorkerMetrics = make(map[int]*WorkerProfileMetrics)
-	for k, v := range p.metrics.WorkerMetrics {
-		workerCopy := *v
-		metrics.WorkerMetrics[k] = &workerCopy
-	}
-	
-	metrics.Percentiles = make(map[float64]time.Duration)
-	for k, v := range p.metrics.Percentiles {
-		metrics.Percentiles[k] = v
-	}
-	
-	return metrics
 }
 
 // GetOverheadPercentage returns the profiling overhead as a percentage
@@ -609,7 +623,7 @@ func (p *PerformanceProfiler) IsWithinOverheadLimit() bool {
 func (p *PerformanceProfiler) SetIntegration(pool *SecureWorkerPool, client *docker.Client, engine *DiagnosticEngine) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.workerPool = pool
 	p.dockerClient = client
 	p.engine = engine
@@ -663,11 +677,11 @@ func (p *PerformanceProfiler) GenerateFlameGraph() ([]byte, error) {
 	if !p.config.EnableFlameGraph {
 		return nil, fmt.Errorf("flame graph generation is disabled")
 	}
-	
+
 	if p.reporter != nil {
 		return p.reporter.GenerateFlameGraph()
 	}
-	
+
 	return nil, fmt.Errorf("no reporter configured")
 }
 
@@ -680,7 +694,7 @@ func calculatePercentile(durations []time.Duration, percentile float64) time.Dur
 	// Sort durations (simple bubble sort for small datasets)
 	sorted := make([]time.Duration, len(durations))
 	copy(sorted, durations)
-	
+
 	for i := 0; i < len(sorted); i++ {
 		for j := i + 1; j < len(sorted); j++ {
 			if sorted[i] > sorted[j] {

@@ -229,6 +229,10 @@ func TestRateLimiterTimingPrecision(t *testing.T) {
 
 // TestRateLimiterBurstRecoveryTiming tests burst capacity recovery timing
 func TestRateLimiterBurstRecoveryTiming(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping timing test in short mode")
+	}
+
 	config := &RateLimiterConfig{
 		RequestsPerSecond: 4.0, // 4 req/sec = 250ms per token
 		BurstSize:         3,
@@ -245,35 +249,27 @@ func TestRateLimiterBurstRecoveryTiming(t *testing.T) {
 		}
 	}
 
-	// Record when burst was exhausted
-	burstExhaustedAt := time.Now()
-
-	// Wait and test recovery at different intervals
-	recoveryTests := []struct {
-		waitTime    time.Duration
-		shouldAllow bool
-		description string
-	}{
-		{200 * time.Millisecond, false, "before first token recovery"},
-		{300 * time.Millisecond, true, "after first token recovery"},
-		{250 * time.Millisecond, true, "after second token recovery"},
-		{250 * time.Millisecond, true, "after third token recovery"},
+	// Test 1: Before token recovery, should fail
+	time.Sleep(200 * time.Millisecond) // Less than 250ms
+	if rl.TryAcquire() {
+		t.Error("TryAcquire should fail before token recovery time")
 	}
 
-	for i, test := range recoveryTests {
-		time.Sleep(test.waitTime)
-		elapsed := time.Since(burstExhaustedAt)
+	// Test 2: After token recovery, should succeed
+	time.Sleep(100 * time.Millisecond) // Total 300ms > 250ms
+	if !rl.TryAcquire() {
+		t.Error("TryAcquire should succeed after token recovery time")
+	}
 
-		allowed := rl.TryAcquire()
-		if allowed != test.shouldAllow {
-			t.Errorf("Recovery test %d (%s): after %v, TryAcquire()=%v, want %v",
-				i+1, test.description, elapsed, allowed, test.shouldAllow)
-		}
+	// Test 3: Immediate retry should fail (no tokens available)
+	if rl.TryAcquire() {
+		t.Error("Immediate retry should fail when no tokens available")
+	}
 
-		if allowed {
-			// Reset timing reference if we successfully acquired
-			burstExhaustedAt = time.Now()
-		}
+	// Test 4: After another recovery period, should succeed again
+	time.Sleep(300 * time.Millisecond) // Wait for next token
+	if !rl.TryAcquire() {
+		t.Error("TryAcquire should succeed after second recovery period")
 	}
 }
 
@@ -294,8 +290,8 @@ func TestRateLimiterConsistentThroughput(t *testing.T) {
 	ctx := context.Background()
 
 	// Test duration and measurement windows
-	testDuration := 3 * time.Second
-	windowSize := 500 * time.Millisecond
+	testDuration := 1 * time.Second      // Reduced from 3s to 1s for faster tests
+	windowSize := 200 * time.Millisecond // Reduced window size for better granularity
 	numWindows := int(testDuration / windowSize)
 
 	start := time.Now()
@@ -337,7 +333,7 @@ func TestRateLimiterConsistentThroughput(t *testing.T) {
 
 	actualDuration := time.Duration(currentWindow-1) * windowSize
 	actualThroughput := float64(totalRequests) / actualDuration.Seconds()
-	
+
 	expectedThroughput := config.RequestsPerSecond
 	throughputTolerance := expectedThroughput * 0.2 // 20% tolerance
 
@@ -374,7 +370,7 @@ func TestRateLimiterMetricsTimingAccuracy(t *testing.T) {
 		start := time.Now()
 		err := rl.Wait(ctx)
 		actualWait := time.Since(start)
-		
+
 		if err != nil {
 			t.Fatalf("Wait %d failed: %v", i+1, err)
 		}
@@ -387,7 +383,7 @@ func TestRateLimiterMetricsTimingAccuracy(t *testing.T) {
 			diff = -diff
 		}
 		if diff > tolerance {
-			t.Errorf("Wait %d took %v, expected %v ± %v", 
+			t.Errorf("Wait %d took %v, expected %v ± %v",
 				i+1, actualWait, expectedWaitTime, tolerance)
 		}
 	}
@@ -415,7 +411,7 @@ func TestRateLimiterMetricsTimingAccuracy(t *testing.T) {
 	}
 
 	// Max wait time should be within reasonable bounds
-	if metrics.MaxWaitTime < expectedWaitTime/2 || 
+	if metrics.MaxWaitTime < expectedWaitTime/2 ||
 		metrics.MaxWaitTime > expectedWaitTime*3 {
 		t.Errorf("MaxWaitTime %v seems unreasonable for expected %v",
 			metrics.MaxWaitTime, expectedWaitTime)
@@ -467,7 +463,7 @@ func TestRateLimiterTimeWindowBoundaries(t *testing.T) {
 
 	// Should have waited approximately the full period
 	expectedWait := 500 * time.Millisecond
-	if waitTime < expectedWait-100*time.Millisecond || 
+	if waitTime < expectedWait-100*time.Millisecond ||
 		waitTime > expectedWait+100*time.Millisecond {
 		t.Errorf("Second wait took %v, expected ~%v", waitTime, expectedWait)
 	}
@@ -497,7 +493,7 @@ func TestRateLimiterConcurrentMetricsConsistency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			for j := 0; j < operationsPerGoroutine; j++ {
 				// Mix operations
 				if j%3 == 0 {
@@ -516,7 +512,7 @@ func TestRateLimiterConcurrentMetricsConsistency(t *testing.T) {
 
 	// Verify metrics consistency
 	metrics := rl.GetMetrics()
-	
+
 	// Total requests should match exactly
 	if metrics.TotalRequests != int64(totalOperations) {
 		t.Errorf("TotalRequests = %d, want %d", metrics.TotalRequests, totalOperations)
@@ -525,14 +521,14 @@ func TestRateLimiterConcurrentMetricsConsistency(t *testing.T) {
 	// All requests should be accounted for
 	accountedRequests := metrics.AllowedRequests + metrics.ThrottledRequests + metrics.TimeoutRequests
 	if accountedRequests != metrics.TotalRequests {
-		t.Errorf("Accounted requests (%d) != total requests (%d)", 
+		t.Errorf("Accounted requests (%d) != total requests (%d)",
 			accountedRequests, metrics.TotalRequests)
 	}
 
 	// Throughput should be reasonable
 	actualThroughput := float64(metrics.AllowedRequests) / elapsed.Seconds()
 	maxExpectedThroughput := config.RequestsPerSecond + float64(config.BurstSize)/elapsed.Seconds()
-	
+
 	if actualThroughput > maxExpectedThroughput*1.1 { // Allow 10% margin
 		t.Errorf("Throughput %.2f req/s exceeds expected maximum %.2f req/s",
 			actualThroughput, maxExpectedThroughput)

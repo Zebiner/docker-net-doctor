@@ -58,7 +58,7 @@ func TestValidationRules(t *testing.T) {
 		criticalFailCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err := validator.ValidateCheck(criticalFailCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "security validation failed")
 	})
 
@@ -72,7 +72,7 @@ func TestValidationRules(t *testing.T) {
 		invalidNameCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err := validator.ValidateCheck(invalidNameCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "check_name_validation")
 	})
 }
@@ -106,7 +106,7 @@ func TestAllowlistDenylistAdvanced(t *testing.T) {
 				if test.expectAllowed {
 					assert.NoError(t, err)
 				} else {
-					assert.Error(t, err)
+					require.Error(t, err)
 					assert.Contains(t, err.Error(), "not in the allowed list")
 				}
 			})
@@ -148,11 +148,11 @@ func TestAllowlistDenylistAdvanced(t *testing.T) {
 		for _, name := range invalidNames {
 			t.Run(fmt.Sprintf("Invalid name: %s", name), func(t *testing.T) {
 				err := validator.AddToAllowlist(name)
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "invalid check name")
 				
 				err = validator.AddToDenylist(name)
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "invalid check name")
 			})
 		}
@@ -410,7 +410,7 @@ func TestSensitiveDataRedaction(t *testing.T) {
 		maliciousCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err := validator.ValidateCheck(maliciousCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "contains potential script injection")
 		
 		// Verify audit log records the failure
@@ -519,7 +519,7 @@ func TestSecurityValidatorEdgeCases(t *testing.T) {
 		
 		// Test nil check
 		err := validator.ValidateCheck(nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "check cannot be nil")
 		
 		// Test empty check name
@@ -529,7 +529,7 @@ func TestSecurityValidatorEdgeCases(t *testing.T) {
 		emptyNameCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err = validator.ValidateCheck(emptyNameCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "check name cannot be empty")
 	})
 
@@ -545,7 +545,7 @@ func TestSecurityValidatorEdgeCases(t *testing.T) {
 		
 		// Should fail because not in allowlist, but name format should be valid
 		err := validator.ValidateCheck(maxLengthCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not in the allowed list")
 		assert.NotContains(t, err.Error(), "check name too long")
 		
@@ -569,7 +569,7 @@ func TestSecurityValidatorEdgeCases(t *testing.T) {
 		overLimitDescCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err = validator.ValidateCheck(overLimitDescCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "check description too long")
 	})
 
@@ -670,7 +670,7 @@ func TestSecurityValidatorEdgeCases(t *testing.T) {
 				
 				err := validator.ValidateCheck(mockCheck)
 				if pattern.expectError {
-					assert.Error(t, err)
+					require.Error(t, err)
 					assert.Contains(t, err.Error(), pattern.errorPattern)
 				} else {
 					assert.NoError(t, err)
@@ -713,7 +713,7 @@ func TestSecurityPolicyManagement(t *testing.T) {
 				if tc.expectAllowed {
 					assert.NoError(t, err)
 				} else {
-					assert.Error(t, err)
+					require.Error(t, err)
 					if tc.errorPattern != "" {
 						assert.Contains(t, err.Error(), tc.errorPattern)
 					}
@@ -733,7 +733,7 @@ func TestSecurityPolicyManagement(t *testing.T) {
 		criticalRuleCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err := validator.ValidateCheck(criticalRuleCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "security validation failed")
 		
 		// Test warning rule behavior (description validation)
@@ -743,7 +743,7 @@ func TestSecurityPolicyManagement(t *testing.T) {
 		warningRuleCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err = validator.ValidateCheck(warningRuleCheck)
-		assert.Error(t, err) // Description validation should still block
+		require.Error(t, err) // Description validation should still block
 		assert.Contains(t, err.Error(), "contains potential script injection")
 	})
 
@@ -790,7 +790,7 @@ func TestSecurityPolicyManagement(t *testing.T) {
 				if pattern.expectAllowed {
 					assert.NoError(t, err)
 				} else {
-					assert.Error(t, err)
+					require.Error(t, err)
 				}
 			})
 		}
@@ -823,7 +823,7 @@ func TestSecurityPolicyManagement(t *testing.T) {
 				mockCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 				
 				err = validator.ValidateCheck(mockCheck)
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "is in the denied list")
 			})
 		}
@@ -865,7 +865,7 @@ func TestAdvancedValidationRules(t *testing.T) {
 						assert.NotContains(t, err.Error(), "contains invalid characters")
 					}
 				} else {
-					assert.Error(t, err)
+					require.Error(t, err)
 					if test.errorPattern != "" {
 						assert.Contains(t, err.Error(), test.errorPattern)
 					}
@@ -981,7 +981,7 @@ func TestAdvancedValidationRules(t *testing.T) {
 				
 				err := validator.ValidateCheck(mockCheck)
 				if injection.expectBlocked {
-					assert.Error(t, err)
+					require.Error(t, err)
 					if injection.blockReason != "" {
 						assert.Contains(t, err.Error(), injection.blockReason)
 					}
@@ -1011,7 +1011,7 @@ func TestValidationRuleCustomization(t *testing.T) {
 		criticalRuleViolation.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err := validator.ValidateCheck(criticalRuleViolation)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "security validation failed")
 		assert.Contains(t, err.Error(), "check_name_validation")
 		
@@ -1022,7 +1022,7 @@ func TestValidationRuleCustomization(t *testing.T) {
 		warningRuleViolation.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err = validator.ValidateCheck(warningRuleViolation)
-		assert.Error(t, err) // Currently blocks even warning rules
+		require.Error(t, err) // Currently blocks even warning rules
 		assert.Contains(t, err.Error(), "contains potential script injection")
 		
 		// Test info severity rule (severity validation with invalid range)
@@ -1032,7 +1032,7 @@ func TestValidationRuleCustomization(t *testing.T) {
 		infoRuleViolation.On("Severity").Return(int(10)) // Invalid severity
 		
 		err = validator.ValidateCheck(infoRuleViolation)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "severity is out of valid range")
 	})
 
@@ -1047,7 +1047,7 @@ func TestValidationRuleCustomization(t *testing.T) {
 		multipleViolationCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 		
 		err := validator.ValidateCheck(multipleViolationCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		// Should fail on name validation first (critical rule)
 		assert.Contains(t, err.Error(), "check_name_validation")
 		assert.Contains(t, err.Error(), "security validation failed")
@@ -1128,7 +1128,7 @@ func TestSecurityValidatorValidateCheck(t *testing.T) {
 	t.Run("Nil Check Validation", func(t *testing.T) {
 		validator := diagnostics.NewSecurityValidator()
 		err := validator.ValidateCheck(nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "check cannot be nil")
 	})
 
@@ -1239,7 +1239,7 @@ func TestSecurityValidatorAllowlistDenylist(t *testing.T) {
 		mockCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 
 		err := validator.ValidateCheck(mockCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not in the allowed list")
 	})
 
@@ -1253,7 +1253,7 @@ func TestSecurityValidatorAllowlistDenylist(t *testing.T) {
 		mockCheck.On("Severity").Return(int(diagnostics.SeverityInfo))
 
 		err := validator.ValidateCheck(mockCheck)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "is in the denied list")
 	})
 }

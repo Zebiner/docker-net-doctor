@@ -5,13 +5,11 @@ package integration
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zebiner/docker-net-doctor/internal/diagnostics"
 	dockerclient "github.com/zebiner/docker-net-doctor/internal/docker"
 )
 
@@ -96,7 +94,7 @@ func TestDockerNetworkDoctorWithContainers(t *testing.T) {
 	t.Log("Docker client connected successfully")
 	
 	// Get basic Docker info as a placeholder test
-	info, err := dockerClient.GetDockerNetworkInfo()
+	info, err := dockerClient.GetNetworkInfo()
 	require.NoError(t, err)
 	t.Logf("Found %d networks", len(info))
 	

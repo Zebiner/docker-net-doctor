@@ -38,7 +38,7 @@ func TestNewCircuitBreaker(t *testing.T) {
 				FailureThreshold:     10,
 				RecoveryTimeout:      60 * time.Second,
 				ConsecutiveSuccesses: 5,
-				HalfOpenMaxRequests:  2, // Default
+				HalfOpenMaxRequests:  2,                // Default
 				ResetTimeout:         60 * time.Second, // Default
 			},
 		},
@@ -47,10 +47,10 @@ func TestNewCircuitBreaker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cb := NewCircuitBreaker(tt.config)
-			
+
 			require.NotNil(t, cb)
 			require.NotNil(t, cb.config)
-			
+
 			assert.Equal(t, CircuitStateClosed, cb.state)
 			assert.Equal(t, tt.expected.FailureThreshold, cb.config.FailureThreshold)
 			assert.Equal(t, tt.expected.RecoveryTimeout, cb.config.RecoveryTimeout)
@@ -73,7 +73,7 @@ func TestCircuitBreakerClosedState(t *testing.T) {
 	// Record some failures below threshold
 	cb.RecordFailure()
 	cb.RecordFailure()
-	
+
 	assert.True(t, cb.CanExecute()) // Still below threshold
 	assert.Equal(t, CircuitStateClosed, cb.GetState())
 	assert.Equal(t, 2, cb.GetFailureCount())
@@ -81,7 +81,7 @@ func TestCircuitBreakerClosedState(t *testing.T) {
 	// Record success - should reset consecutive failures
 	cb.RecordSuccess()
 	assert.Equal(t, 2, cb.GetFailureCount()) // Total failures still 2
-	
+
 	// Can still execute
 	assert.True(t, cb.CanExecute())
 	assert.Equal(t, CircuitStateClosed, cb.GetState())
@@ -132,7 +132,7 @@ func TestCircuitBreakerHalfOpenState(t *testing.T) {
 	// Record successes to close circuit
 	cb.RecordSuccess()
 	cb.RecordSuccess()
-	
+
 	// Circuit should now be closed
 	assert.Equal(t, CircuitStateClosed, cb.GetState())
 	assert.True(t, cb.CanExecute())
@@ -175,14 +175,14 @@ func TestCircuitBreakerMetrics(t *testing.T) {
 	cb.RecordSuccess()
 
 	metrics := cb.GetMetrics()
-	
+
 	assert.Equal(t, CircuitStateClosed, metrics.State)
 	assert.Equal(t, 1, metrics.FailureCount)
 	assert.Equal(t, int64(3), metrics.TotalRequests)
 	assert.Equal(t, int64(1), metrics.TotalFailures)
 	assert.Equal(t, int64(2), metrics.TotalSuccesses)
 	assert.True(t, metrics.IsHealthy)
-	
+
 	// Check failure rate calculation
 	expectedFailureRate := 1.0 / 3.0
 	assert.InDelta(t, expectedFailureRate, metrics.FailureRate, 0.001)
@@ -207,7 +207,7 @@ func TestCircuitBreakerReset(t *testing.T) {
 	assert.True(t, cb.CanExecute())
 
 	metrics := cb.GetMetrics()
-	assert.Equal(t, int64(0), metrics.TotalRequests)
+	assert.Equal(t, int64(1), metrics.TotalRequests) // CanExecute() was called once
 	assert.Equal(t, int64(0), metrics.TotalFailures)
 	assert.Equal(t, int64(0), metrics.TotalSuccesses)
 }
@@ -326,11 +326,11 @@ func TestCircuitBreakerHealthScore(t *testing.T) {
 			})
 
 			tt.setupOperation(cb)
-			
+
 			assert.Equal(t, tt.state, cb.GetState())
-			
+
 			healthScore := cb.GetHealthScore()
-			assert.True(t, healthScore >= tt.minScore, 
+			assert.True(t, healthScore >= tt.minScore,
 				"health score %f should be >= %f", healthScore, tt.minScore)
 			assert.True(t, healthScore <= tt.maxScore,
 				"health score %f should be <= %f", healthScore, tt.maxScore)
@@ -350,14 +350,14 @@ func TestCircuitBreakerConfigUpdate(t *testing.T) {
 		ConsecutiveSuccesses: 4,
 		RecoveryTimeout:      45 * time.Second,
 	}
-	
+
 	cb.UpdateConfig(newConfig)
-	
+
 	// Verify configuration was updated
 	assert.Equal(t, 5, cb.config.FailureThreshold)
 	assert.Equal(t, 4, cb.config.ConsecutiveSuccesses)
 	assert.Equal(t, 45*time.Second, cb.config.RecoveryTimeout)
-	
+
 	// Defaults should be set for unspecified values
 	assert.Equal(t, 2, cb.config.HalfOpenMaxRequests)
 }
@@ -385,14 +385,14 @@ func TestCircuitBreakerStateHistory(t *testing.T) {
 	// Cause state transitions
 	cb.RecordFailure()
 	cb.RecordFailure() // Should open
-	
+
 	time.Sleep(15 * time.Millisecond)
 	cb.CanExecute() // Should transition to half-open
-	
+
 	cb.ForceClose() // Force close
-	
+
 	history := cb.GetStateHistory()
-	
+
 	// Should have recorded transitions
 	assert.True(t, history[CircuitStateOpen] > 0)
 	assert.True(t, history[CircuitStateHalfOpen] > 0)
@@ -408,12 +408,12 @@ func TestCircuitBreakerResetTimeout(t *testing.T) {
 	// Record failures
 	cb.RecordFailure()
 	cb.RecordFailure()
-	
+
 	assert.Equal(t, 2, cb.GetFailureCount())
 
 	// Wait for reset timeout
 	time.Sleep(60 * time.Millisecond)
-	
+
 	// Next CanExecute should reset failure count
 	cb.CanExecute()
 	assert.Equal(t, 0, cb.GetFailureCount())
@@ -426,11 +426,11 @@ func TestCircuitBreakerConcurrentAccess(t *testing.T) {
 
 	// Test concurrent access
 	done := make(chan bool, 100)
-	
+
 	for i := 0; i < 100; i++ {
 		go func(id int) {
 			defer func() { done <- true }()
-			
+
 			if cb.CanExecute() {
 				if id%2 == 0 {
 					cb.RecordSuccess()
@@ -454,8 +454,8 @@ func TestCircuitBreakerConcurrentAccess(t *testing.T) {
 
 func TestCircuitBreakerIsHealthy(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupOperation func(*CircuitBreaker)
+		name            string
+		setupOperation  func(*CircuitBreaker)
 		expectedHealthy bool
 	}{
 		{
@@ -517,7 +517,7 @@ func TestCircuitBreakerIsHealthy(t *testing.T) {
 			})
 
 			tt.setupOperation(cb)
-			
+
 			isHealthy := cb.IsHealthy()
 			assert.Equal(t, tt.expectedHealthy, isHealthy)
 		})
@@ -528,7 +528,7 @@ func TestCircuitBreakerIsHealthy(t *testing.T) {
 
 func BenchmarkCanExecuteClosed(b *testing.B) {
 	cb := NewCircuitBreaker(&CircuitBreakerConfig{})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if !cb.CanExecute() {
@@ -541,10 +541,10 @@ func BenchmarkCanExecuteOpen(b *testing.B) {
 	cb := NewCircuitBreaker(&CircuitBreakerConfig{
 		FailureThreshold: 1,
 	})
-	
+
 	// Open the circuit
 	cb.RecordFailure()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if cb.CanExecute() {
@@ -555,7 +555,7 @@ func BenchmarkCanExecuteOpen(b *testing.B) {
 
 func BenchmarkRecordSuccess(b *testing.B) {
 	cb := NewCircuitBreaker(&CircuitBreakerConfig{})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cb.RecordSuccess()
@@ -566,7 +566,7 @@ func BenchmarkRecordFailure(b *testing.B) {
 	cb := NewCircuitBreaker(&CircuitBreakerConfig{
 		FailureThreshold: 1000000, // High threshold to prevent opening
 	})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cb.RecordFailure()
@@ -575,7 +575,7 @@ func BenchmarkRecordFailure(b *testing.B) {
 
 func BenchmarkGetMetrics(b *testing.B) {
 	cb := NewCircuitBreaker(&CircuitBreakerConfig{})
-	
+
 	// Add some data
 	for i := 0; i < 100; i++ {
 		cb.CanExecute()
@@ -585,12 +585,31 @@ func BenchmarkGetMetrics(b *testing.B) {
 			cb.RecordFailure()
 		}
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		metrics := cb.GetMetrics()
 		if metrics.TotalRequests == 0 {
 			b.Fatal("expected non-zero metrics")
 		}
+	}
+}
+
+// TestCircuitStateString tests the String() method for all circuit states
+func TestCircuitStateString(t *testing.T) {
+	tests := []struct {
+		state    CircuitState
+		expected string
+	}{
+		{CircuitStateClosed, "CLOSED"},
+		{CircuitStateOpen, "OPEN"},
+		{CircuitStateHalfOpen, "HALF_OPEN"},
+		{CircuitState(99), "UNKNOWN"}, // Test unknown state
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.state.String())
+		})
 	}
 }

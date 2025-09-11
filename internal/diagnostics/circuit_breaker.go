@@ -8,7 +8,7 @@
 //
 // Circuit States:
 //   - CLOSED: Normal operation, requests flow through
-//   - OPEN: Circuit is open, requests are rejected immediately  
+//   - OPEN: Circuit is open, requests are rejected immediately
 //   - HALF_OPEN: Testing state, limited requests allowed to test recovery
 //
 // Key Features:
@@ -25,7 +25,7 @@
 //       RecoveryTimeout: 30 * time.Second,
 //       ConsecutiveSuccesses: 3,
 //   })
-//   
+//
 //   if cb.CanExecute() {
 //       result, err := operation()
 //       if err != nil {
@@ -48,10 +48,10 @@ type CircuitState int
 const (
 	// CircuitStateClosed indicates normal operation - requests flow through
 	CircuitStateClosed CircuitState = iota
-	
+
 	// CircuitStateOpen indicates circuit is open - requests are rejected
 	CircuitStateOpen
-	
+
 	// CircuitStateHalfOpen indicates testing state - limited requests allowed
 	CircuitStateHalfOpen
 )
@@ -84,26 +84,27 @@ func (cs CircuitState) String() string {
 // Thread Safety: CircuitBreaker is safe for concurrent use across multiple goroutines.
 type CircuitBreaker struct {
 	config *CircuitBreakerConfig
-	
+
 	// State management
-	state        CircuitState
-	lastFailTime time.Time
+	state           CircuitState
+	lastFailTime    time.Time
 	lastStateChange time.Time
-	
+
 	// Counters
-	failureCount       int
-	successCount       int  // Used in half-open state
-	consecutiveFailures int
-	totalRequests      int64
-	totalFailures      int64
-	totalSuccesses     int64
-	
+	failureCount         int
+	successCount         int // Used in half-open state
+	halfOpenRequestCount int // Track requests made in half-open state
+	consecutiveFailures  int
+	totalRequests        int64
+	totalFailures        int64
+	totalSuccesses       int64
+
 	// Timing
 	lastRequestTime time.Time
-	
+
 	// Metrics
 	stateTransitions map[CircuitState]int64
-	
+
 	// Thread safety
 	mu sync.RWMutex
 }
@@ -111,52 +112,53 @@ type CircuitBreaker struct {
 // CircuitBreakerConfig defines the behavior and thresholds for the circuit breaker
 type CircuitBreakerConfig struct {
 	// Failure thresholds
-	FailureThreshold     int           // Number of failures before opening circuit
-	FailureRate          float64       // Failure rate threshold (0.0-1.0) - alternative to count
-	MinRequestsThreshold int           // Minimum requests before considering failure rate
-	
+	FailureThreshold     int     // Number of failures before opening circuit
+	FailureRate          float64 // Failure rate threshold (0.0-1.0) - alternative to count
+	MinRequestsThreshold int     // Minimum requests before considering failure rate
+
 	// Recovery configuration
 	RecoveryTimeout      time.Duration // Time to wait before trying half-open
 	ConsecutiveSuccesses int           // Successes needed in half-open to close circuit
 	HalfOpenMaxRequests  int           // Maximum requests allowed in half-open state
-	
+
 	// Timing configuration
-	ResetTimeout         time.Duration // Time to reset failure count in closed state
-	
+	ResetTimeout time.Duration // Time to reset failure count in closed state
+
 	// Advanced features
-	AdaptiveThresholds   bool          // Enable adaptive threshold adjustment
-	RequestVolumeThreshold int         // Minimum request volume for adaptive behavior
+	AdaptiveThresholds     bool // Enable adaptive threshold adjustment
+	RequestVolumeThreshold int  // Minimum request volume for adaptive behavior
 }
 
 // CircuitBreakerMetrics provides comprehensive statistics about circuit breaker operation
 type CircuitBreakerMetrics struct {
 	// Current state
-	State               CircuitState  `json:"state"`
-	FailureCount        int          `json:"failure_count"`
-	SuccessCount        int          `json:"success_count"`
-	ConsecutiveFailures int          `json:"consecutive_failures"`
-	
+	State                CircuitState `json:"state"`
+	FailureCount         int          `json:"failure_count"`
+	SuccessCount         int          `json:"success_count"`
+	HalfOpenRequestCount int          `json:"half_open_request_count"`
+	ConsecutiveFailures  int          `json:"consecutive_failures"`
+
 	// Historical data
-	TotalRequests       int64        `json:"total_requests"`
-	TotalFailures       int64        `json:"total_failures"`
-	TotalSuccesses      int64        `json:"total_successes"`
-	
+	TotalRequests  int64 `json:"total_requests"`
+	TotalFailures  int64 `json:"total_failures"`
+	TotalSuccesses int64 `json:"total_successes"`
+
 	// Timing information
-	LastFailTime        time.Time    `json:"last_fail_time"`
-	LastStateChange     time.Time    `json:"last_state_change"`
-	LastRequestTime     time.Time    `json:"last_request_time"`
-	
+	LastFailTime    time.Time `json:"last_fail_time"`
+	LastStateChange time.Time `json:"last_state_change"`
+	LastRequestTime time.Time `json:"last_request_time"`
+
 	// State transitions
-	StateTransitions    map[CircuitState]int64 `json:"state_transitions"`
-	
+	StateTransitions map[CircuitState]int64 `json:"state_transitions"`
+
 	// Calculated metrics
-	FailureRate         float64      `json:"failure_rate"`
-	RequestRate         float64      `json:"request_rate"` // Requests per second
-	TimeInCurrentState  time.Duration `json:"time_in_current_state"`
-	
+	FailureRate        float64       `json:"failure_rate"`
+	RequestRate        float64       `json:"request_rate"` // Requests per second
+	TimeInCurrentState time.Duration `json:"time_in_current_state"`
+
 	// Health indicators
-	IsHealthy           bool         `json:"is_healthy"`
-	EstimatedRecoveryTime time.Time  `json:"estimated_recovery_time"`
+	IsHealthy             bool      `json:"is_healthy"`
+	EstimatedRecoveryTime time.Time `json:"estimated_recovery_time"`
 }
 
 // NewCircuitBreaker creates a new circuit breaker with the specified configuration.
@@ -164,19 +166,19 @@ type CircuitBreakerMetrics struct {
 //
 // Default configuration:
 //   - 5 failure threshold
-//   - 30 second recovery timeout  
+//   - 30 second recovery timeout
 //   - 3 consecutive successes to close
 //   - 2 requests allowed in half-open state
 //   - 60 second reset timeout
 func NewCircuitBreaker(config *CircuitBreakerConfig) *CircuitBreaker {
 	if config == nil {
 		config = &CircuitBreakerConfig{
-			FailureThreshold:     5,
-			RecoveryTimeout:      30 * time.Second,
-			ConsecutiveSuccesses: 3,
-			HalfOpenMaxRequests:  2,
-			ResetTimeout:         60 * time.Second,
-			MinRequestsThreshold: 10,
+			FailureThreshold:       5,
+			RecoveryTimeout:        30 * time.Second,
+			ConsecutiveSuccesses:   3,
+			HalfOpenMaxRequests:    2,
+			ResetTimeout:           60 * time.Second,
+			MinRequestsThreshold:   10,
 			RequestVolumeThreshold: 20,
 		}
 	}
@@ -232,13 +234,18 @@ func (cb *CircuitBreaker) CanExecute() bool {
 		// Check if recovery timeout has passed
 		if now.Sub(cb.lastStateChange) >= cb.config.RecoveryTimeout {
 			cb.transitionToHalfOpen()
+			cb.halfOpenRequestCount++
 			return true
 		}
 		return false
 
 	case CircuitStateHalfOpen:
 		// Allow limited requests to test recovery
-		return cb.successCount < cb.config.HalfOpenMaxRequests
+		if cb.halfOpenRequestCount < cb.config.HalfOpenMaxRequests {
+			cb.halfOpenRequestCount++
+			return true
+		}
+		return false
 
 	default:
 		return false
@@ -262,7 +269,10 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	switch cb.state {
 	case CircuitStateClosed:
 		// Normal operation, just record the success
-		
+		// But also check if failure rate threshold is exceeded
+		if cb.shouldOpenCircuit() {
+			cb.transitionToOpen()
+		}
 	case CircuitStateHalfOpen:
 		cb.successCount++
 		// Check if we have enough consecutive successes to close the circuit
@@ -331,7 +341,7 @@ func (cb *CircuitBreaker) GetMetrics() CircuitBreakerMetrics {
 	defer cb.mu.RUnlock()
 
 	now := time.Now()
-	
+
 	// Calculate failure rate
 	failureRate := 0.0
 	if cb.totalRequests > 0 {
@@ -360,21 +370,22 @@ func (cb *CircuitBreaker) GetMetrics() CircuitBreakerMetrics {
 	}
 
 	return CircuitBreakerMetrics{
-		State:               cb.state,
-		FailureCount:        cb.failureCount,
-		SuccessCount:        cb.successCount,
-		ConsecutiveFailures: cb.consecutiveFailures,
-		TotalRequests:       cb.totalRequests,
-		TotalFailures:       cb.totalFailures,
-		TotalSuccesses:      cb.totalSuccesses,
-		LastFailTime:        cb.lastFailTime,
-		LastStateChange:     cb.lastStateChange,
-		LastRequestTime:     cb.lastRequestTime,
-		StateTransitions:    stateTransitions,
-		FailureRate:         failureRate,
-		RequestRate:         requestRate,
-		TimeInCurrentState:  now.Sub(cb.lastStateChange),
-		IsHealthy:           cb.isHealthyInternal(),
+		State:                 cb.state,
+		FailureCount:          cb.failureCount,
+		SuccessCount:          cb.successCount,
+		HalfOpenRequestCount:  cb.halfOpenRequestCount,
+		ConsecutiveFailures:   cb.consecutiveFailures,
+		TotalRequests:         cb.totalRequests,
+		TotalFailures:         cb.totalFailures,
+		TotalSuccesses:        cb.totalSuccesses,
+		LastFailTime:          cb.lastFailTime,
+		LastStateChange:       cb.lastStateChange,
+		LastRequestTime:       cb.lastRequestTime,
+		StateTransitions:      stateTransitions,
+		FailureRate:           failureRate,
+		RequestRate:           requestRate,
+		TimeInCurrentState:    now.Sub(cb.lastStateChange),
+		IsHealthy:             cb.isHealthyInternal(),
 		EstimatedRecoveryTime: estimatedRecoveryTime,
 	}
 }
@@ -383,10 +394,11 @@ func (cb *CircuitBreaker) GetMetrics() CircuitBreakerMetrics {
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	cb.state = CircuitStateClosed
 	cb.failureCount = 0
 	cb.successCount = 0
+	cb.halfOpenRequestCount = 0
 	cb.consecutiveFailures = 0
 	cb.totalRequests = 0
 	cb.totalFailures = 0
@@ -394,7 +406,7 @@ func (cb *CircuitBreaker) Reset() {
 	cb.lastStateChange = time.Now()
 	cb.lastFailTime = time.Time{}
 	cb.lastRequestTime = time.Time{}
-	
+
 	// Reset state transitions but keep the map
 	for k := range cb.stateTransitions {
 		cb.stateTransitions[k] = 0
@@ -419,15 +431,15 @@ func (cb *CircuitBreaker) isHealthyInternal() bool {
 			return failureRate < 0.5 // Less than 50% failure rate
 		}
 		return cb.consecutiveFailures < cb.config.FailureThreshold/2
-		
+
 	case CircuitStateHalfOpen:
 		// Healthy if making progress in recovery testing
 		return cb.successCount > 0
-		
+
 	case CircuitStateOpen:
 		// Not healthy when circuit is open
 		return false
-		
+
 	default:
 		return false
 	}
@@ -486,6 +498,7 @@ func (cb *CircuitBreaker) transitionToClosed() {
 		cb.lastStateChange = time.Now()
 		cb.resetFailureCount()
 		cb.successCount = 0
+		cb.halfOpenRequestCount = 0
 		cb.stateTransitions[CircuitStateClosed]++
 	}
 }
@@ -495,6 +508,7 @@ func (cb *CircuitBreaker) transitionToHalfOpen() {
 		cb.state = CircuitStateHalfOpen
 		cb.lastStateChange = time.Now()
 		cb.successCount = 0
+		cb.halfOpenRequestCount = 0
 		cb.stateTransitions[CircuitStateHalfOpen]++
 	}
 }
@@ -514,10 +528,10 @@ func (cb *CircuitBreaker) UpdateConfig(config *CircuitBreakerConfig) {
 
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	// Update configuration while preserving current state
 	cb.config = config
-	
+
 	// Ensure required defaults
 	if cb.config.ConsecutiveSuccesses == 0 {
 		cb.config.ConsecutiveSuccesses = 3
@@ -545,13 +559,13 @@ func (cb *CircuitBreaker) ForceClose() {
 func (cb *CircuitBreaker) GetStateHistory() map[CircuitState]int64 {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	
+
 	// Return a copy to prevent external modification
 	history := make(map[CircuitState]int64)
 	for k, v := range cb.stateTransitions {
 		history[k] = v
 	}
-	
+
 	return history
 }
 
@@ -559,7 +573,7 @@ func (cb *CircuitBreaker) GetStateHistory() map[CircuitState]int64 {
 func (cb *CircuitBreaker) GetHealthScore() float64 {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	
+
 	switch cb.state {
 	case CircuitStateClosed:
 		if cb.totalRequests == 0 {
@@ -570,17 +584,17 @@ func (cb *CircuitBreaker) GetHealthScore() float64 {
 		// Penalize consecutive failures
 		failurePenalty := float64(cb.consecutiveFailures) / float64(cb.config.FailureThreshold)
 		return successRate * (1.0 - failurePenalty*0.5)
-		
+
 	case CircuitStateHalfOpen:
 		// Partial credit for attempting recovery
 		if cb.successCount == 0 {
 			return 0.3
 		}
 		return 0.3 + 0.4*float64(cb.successCount)/float64(cb.config.ConsecutiveSuccesses)
-		
+
 	case CircuitStateOpen:
 		return 0.0
-		
+
 	default:
 		return 0.0
 	}

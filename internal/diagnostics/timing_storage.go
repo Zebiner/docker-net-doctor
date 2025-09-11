@@ -14,11 +14,11 @@ type TimingStorage struct {
 	maxSize      int
 	currentIndex int
 	wrapped      bool // Indicates if we've wrapped around (circular buffer)
-	
+
 	// Indexes for fast lookup
-	byCategory   map[string][]*TimingData
-	byCheck      map[string][]*TimingData
-	byWorker     map[int][]*TimingData
+	byCategory map[string][]*TimingData
+	byCheck    map[string][]*TimingData
+	byWorker   map[int][]*TimingData
 }
 
 // NewTimingStorage creates a new timing storage with bounded size
@@ -52,13 +52,13 @@ func (ts *TimingStorage) Store(timing *TimingData) {
 	} else {
 		// Overwrite oldest entry
 		ts.currentIndex = (ts.currentIndex + 1) % ts.maxSize
-		
+
 		// Remove old entry from indexes
 		oldTiming := ts.measurements[ts.currentIndex]
 		if oldTiming != nil {
 			ts.removeFromIndexes(oldTiming)
 		}
-		
+
 		ts.measurements[ts.currentIndex] = timing
 		ts.wrapped = true
 	}
@@ -86,7 +86,7 @@ func (ts *TimingStorage) GetAll() []*TimingData {
 
 	// Create a copy to avoid race conditions
 	result := make([]*TimingData, 0, len(ts.measurements))
-	
+
 	if ts.wrapped {
 		// If wrapped, return in chronological order
 		// Start from the oldest (next position after current)
@@ -216,9 +216,9 @@ func (ts *TimingStorage) GetTimeRange(start, end time.Time) []*TimingData {
 
 	result := make([]*TimingData, 0)
 	for _, timing := range ts.measurements {
-		if timing != nil && 
-		   !timing.StartTime.Before(start) && 
-		   !timing.EndTime.After(end) {
+		if timing != nil &&
+			!timing.StartTime.Before(start) &&
+			!timing.EndTime.After(end) {
 			result = append(result, timing)
 		}
 	}
@@ -298,7 +298,7 @@ func (ts *TimingStorage) Clear() {
 	ts.measurements = make([]*TimingData, 0, ts.maxSize)
 	ts.currentIndex = 0
 	ts.wrapped = false
-	
+
 	// Clear indexes
 	ts.byCategory = make(map[string][]*TimingData)
 	ts.byCheck = make(map[string][]*TimingData)
@@ -367,7 +367,7 @@ func (ts *TimingStorage) removeTimingFromSlice(slice []*TimingData, timing *Timi
 			// Remove element by replacing with last and truncating
 			slice[i] = slice[len(slice)-1]
 			slice = slice[:len(slice)-1]
-			
+
 			// Update the index map
 			switch indexType {
 			case "category":
@@ -450,16 +450,16 @@ func (ts *TimingStorage) exportCSV() ([]byte, error) {
 	// Simplified implementation - in production you'd use encoding/csv
 	var csv string
 	csv = "Name,Category,Duration,Success\n"
-	
+
 	for _, timing := range ts.GetAll() {
 		if timing != nil {
-			csv += fmt.Sprintf("%s,%s,%v,%v\n", 
-				timing.Name, 
-				timing.Category, 
-				timing.Duration, 
+			csv += fmt.Sprintf("%s,%s,%v,%v\n",
+				timing.Name,
+				timing.Category,
+				timing.Duration,
 				timing.Success)
 		}
 	}
-	
+
 	return []byte(csv), nil
 }

@@ -17,21 +17,21 @@ import (
 
 // Security limits approved by security review
 const (
-	MAX_WORKERS          = 10                     // Bounded worker pool
-	MAX_QUEUE_SIZE       = 100                    // Prevent memory exhaustion
-	MAX_CHECK_TIMEOUT    = 30 * time.Second       // Individual check timeout
-	MAX_TOTAL_TIMEOUT    = 2 * time.Minute         // Total execution timeout
-	DOCKER_API_RATE_LIMIT = 5                     // 5 calls/second
-	DOCKER_API_BURST     = 10                     // Burst of 10 calls
-	MAX_MEMORY_MB        = 500                    // Maximum additional memory overhead
+	MAX_WORKERS           = 10               // Bounded worker pool
+	MAX_QUEUE_SIZE        = 100              // Prevent memory exhaustion
+	MAX_CHECK_TIMEOUT     = 30 * time.Second // Individual check timeout
+	MAX_TOTAL_TIMEOUT     = 2 * time.Minute  // Total execution timeout
+	DOCKER_API_RATE_LIMIT = 5                // 5 calls/second
+	DOCKER_API_BURST      = 10               // Burst of 10 calls
+	MAX_MEMORY_MB         = 500              // Maximum additional memory overhead
 )
 
 // Job represents a diagnostic check to be executed
 type Job struct {
-	ID       int
-	Check    Check
-	Context  context.Context
-	Client   *docker.Client
+	ID      int
+	Check   Check
+	Context context.Context
+	Client  *docker.Client
 }
 
 // JobResult contains the result of executing a job
@@ -45,66 +45,66 @@ type JobResult struct {
 // SecureWorkerPool manages concurrent execution with security constraints
 type SecureWorkerPool struct {
 	// Core components
-	workers      int                   // Number of worker goroutines
-	jobs         chan Job              // Buffered job queue
-	results      chan JobResult        // Results collection channel
-	wg           sync.WaitGroup        // Worker synchronization
-	ctx          context.Context       // Pool context for cancellation
-	cancel       context.CancelFunc    // Cancel function
+	workers int                // Number of worker goroutines
+	jobs    chan Job           // Buffered job queue
+	results chan JobResult     // Results collection channel
+	wg      sync.WaitGroup     // Worker synchronization
+	ctx     context.Context    // Pool context for cancellation
+	cancel  context.CancelFunc // Cancel function
 
 	// Security and monitoring
-	rateLimiter  *rate.Limiter         // API rate limiting
-	metrics      *PoolMetrics          // Performance tracking
-	validator    *SecurityValidator    // Security validation
-	
+	rateLimiter *rate.Limiter      // API rate limiting
+	metrics     *PoolMetrics       // Performance tracking
+	validator   *SecurityValidator // Security validation
+
 	// State management
-	started      atomic.Bool           // Pool started flag
-	stopped      atomic.Bool           // Pool stopped flag
-	activeJobs   atomic.Int32          // Number of active jobs
-	completedJobs atomic.Int32         // Number of completed jobs
-	failedJobs   atomic.Int32          // Number of failed jobs
-	
+	started       atomic.Bool  // Pool started flag
+	stopped       atomic.Bool  // Pool stopped flag
+	activeJobs    atomic.Int32 // Number of active jobs
+	completedJobs atomic.Int32 // Number of completed jobs
+	failedJobs    atomic.Int32 // Number of failed jobs
+
 	// Resource monitoring
-	memoryMonitor *MemoryMonitor       // Memory usage tracking
-	errorRate     *ErrorRateMonitor    // Error rate circuit breaker
+	memoryMonitor *MemoryMonitor    // Memory usage tracking
+	errorRate     *ErrorRateMonitor // Error rate circuit breaker
 }
 
 // PoolMetrics tracks performance and resource usage
 type PoolMetrics struct {
-	mu                sync.RWMutex
-	StartTime         time.Time
-	EndTime           time.Time
-	TotalJobs         int
-	CompletedJobs     int
-	FailedJobs        int
-	AverageJobTime    time.Duration
-	MaxJobTime        time.Duration
-	MinJobTime        time.Duration
-	TotalAPIcalls     int64
-	RateLimitHits     int64
-	PeakMemoryMB      float64
-	PeakWorkers       int
-	RecoveredPanics   int
+	mu              sync.RWMutex
+	StartTime       time.Time
+	EndTime         time.Time
+	TotalJobs       int
+	CompletedJobs   int
+	FailedJobs      int
+	AverageJobTime  time.Duration
+	MaxJobTime      time.Duration
+	MinJobTime      time.Duration
+	TotalAPIcalls   int64
+	RateLimitHits   int64
+	PeakMemoryMB    float64
+	PeakWorkers     int
+	RecoveredPanics int
 }
 
 // MemoryMonitor tracks memory usage
 type MemoryMonitor struct {
-	baseline     uint64
-	peakUsage    uint64
-	mu           sync.RWMutex
+	baseline      uint64
+	peakUsage     uint64
+	mu            sync.RWMutex
 	checkInterval time.Duration
-	stopChan     chan struct{}
+	stopChan      chan struct{}
 }
 
 // ErrorRateMonitor implements circuit breaker pattern
 type ErrorRateMonitor struct {
-	mu              sync.RWMutex
-	errorCount      int
-	successCount    int
-	window          time.Duration
-	threshold       float64
-	lastReset       time.Time
-	circuitOpen     bool
+	mu           sync.RWMutex
+	errorCount   int
+	successCount int
+	window       time.Duration
+	threshold    float64
+	lastReset    time.Time
+	circuitOpen  bool
 }
 
 // NewSecureWorkerPool creates a new secure worker pool with bounded concurrency
@@ -122,7 +122,7 @@ func NewSecureWorkerPool(ctx context.Context, workerCount int) (*SecureWorkerPoo
 
 	// Determine if we're in test mode
 	isTestMode := isTestContext()
-	
+
 	var validator *SecurityValidator
 	if isTestMode {
 		validator = NewSecurityValidatorTestMode()
@@ -164,19 +164,19 @@ func isTestContext() bool {
 	if strings.HasSuffix(os.Args[0], ".test") {
 		return true
 	}
-	
+
 	// Check for common test indicators in arguments
 	for _, arg := range os.Args {
 		if strings.Contains(arg, "-test.") {
 			return true
 		}
 	}
-	
+
 	// Check environment variable as fallback
 	if os.Getenv("GO_TEST") != "" {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -233,7 +233,7 @@ func (p *SecureWorkerPool) Stop() error {
 
 	// Don't close the results channel immediately - let the consumer drain it
 	// The channel will be garbage collected when no longer referenced
-	
+
 	// Update metrics
 	p.metrics.mu.Lock()
 	p.metrics.EndTime = time.Now()
@@ -265,8 +265,9 @@ func (p *SecureWorkerPool) Submit(check Check, client *docker.Client) error {
 	}
 
 	// Create job with timeout context
-	jobCtx, _ := context.WithTimeout(p.ctx, MAX_CHECK_TIMEOUT)
-	
+	jobCtx, cancel := context.WithTimeout(p.ctx, MAX_CHECK_TIMEOUT)
+	defer cancel()
+
 	job := Job{
 		ID:      int(p.completedJobs.Load() + p.activeJobs.Load()),
 		Check:   check,
@@ -400,7 +401,7 @@ func (p *SecureWorkerPool) GetResults() <-chan JobResult {
 // WaitForCompletion waits for all submitted jobs to complete
 func (p *SecureWorkerPool) WaitForCompletion(timeout time.Duration) error {
 	done := make(chan struct{})
-	
+
 	go func() {
 		// Wait until no active jobs and all jobs are processed
 		for {
@@ -411,7 +412,7 @@ func (p *SecureWorkerPool) WaitForCompletion(timeout time.Duration) error {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}()
-	
+
 	select {
 	case <-done:
 		return nil
@@ -421,17 +422,32 @@ func (p *SecureWorkerPool) WaitForCompletion(timeout time.Duration) error {
 }
 
 // GetMetrics returns current pool metrics
-func (p *SecureWorkerPool) GetMetrics() PoolMetrics {
+func (p *SecureWorkerPool) GetMetrics() *PoolMetrics {
 	p.metrics.mu.RLock()
 	defer p.metrics.mu.RUnlock()
-	
-	metrics := *p.metrics
-	metrics.TotalJobs = int(p.completedJobs.Load() + p.failedJobs.Load())
-	metrics.CompletedJobs = int(p.completedJobs.Load())
-	metrics.FailedJobs = int(p.failedJobs.Load())
-	metrics.PeakMemoryMB = float64(p.memoryMonitor.GetPeakUsage()) / (1024 * 1024)
-	
-	return metrics
+
+	// Create a copy without the mutex to avoid lock copying
+	totalJobs := int(p.completedJobs.Load() + p.failedJobs.Load())
+	completedJobs := int(p.completedJobs.Load())
+	failedJobs := int(p.failedJobs.Load())
+	peakMemoryMB := float64(p.memoryMonitor.GetPeakUsage()) / (1024 * 1024)
+
+	return &PoolMetrics{
+		StartTime:       p.metrics.StartTime,
+		EndTime:         p.metrics.EndTime,
+		TotalJobs:       totalJobs,
+		CompletedJobs:   completedJobs,
+		FailedJobs:      failedJobs,
+		AverageJobTime:  p.metrics.AverageJobTime,
+		MaxJobTime:      p.metrics.MaxJobTime,
+		MinJobTime:      p.metrics.MinJobTime,
+		TotalAPIcalls:   p.metrics.TotalAPIcalls,
+		RateLimitHits:   p.metrics.RateLimitHits,
+		PeakMemoryMB:    peakMemoryMB,
+		PeakWorkers:     p.metrics.PeakWorkers,
+		RecoveredPanics: p.metrics.RecoveredPanics,
+		// Deliberately omit mu field to avoid copying mutex
+	}
 }
 
 // updateMetrics updates pool performance metrics
@@ -512,7 +528,7 @@ func (m *MemoryMonitor) Start() {
 func (m *MemoryMonitor) IsOverLimit() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	current := getCurrentMemory()
 	if current <= m.baseline {
 		return false // No additional memory used
@@ -535,7 +551,7 @@ func (m *MemoryMonitor) GetPeakUsage() uint64 {
 func (e *ErrorRateMonitor) RecordError() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	e.checkWindow()
 	e.errorCount++
 	e.updateCircuitState()
@@ -544,7 +560,7 @@ func (e *ErrorRateMonitor) RecordError() {
 func (e *ErrorRateMonitor) RecordSuccess() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	e.checkWindow()
 	e.successCount++
 	e.updateCircuitState()
@@ -573,7 +589,7 @@ func (e *ErrorRateMonitor) updateCircuitState() {
 	}
 
 	errorRate := float64(e.errorCount) / float64(total)
-	if errorRate > e.threshold {
+	if errorRate >= e.threshold {
 		e.circuitOpen = true
 	} else if errorRate < (e.threshold * 0.5) {
 		// Close circuit when error rate drops significantly

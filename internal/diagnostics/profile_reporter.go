@@ -66,7 +66,7 @@ func (pr *ProfileReporter) GenerateReport() string {
 }
 
 // writeExecutiveSummary writes the executive summary section
-func (pr *ProfileReporter) writeExecutiveSummary(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeExecutiveSummary(report *strings.Builder, metrics *ProfileMetrics) {
 	report.WriteString("EXECUTIVE SUMMARY\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
 
@@ -74,16 +74,16 @@ func (pr *ProfileReporter) writeExecutiveSummary(report *strings.Builder, metric
 	report.WriteString(fmt.Sprintf("Total Duration:       %v\n", metrics.TotalDuration))
 	report.WriteString(fmt.Sprintf("Average Duration:     %v\n", metrics.AverageDuration))
 	report.WriteString(fmt.Sprintf("Accuracy Achieved:    %v (target: 1ms)\n", metrics.AccuracyAchieved))
-	
+
 	// Performance rating
 	rating := pr.calculatePerformanceRating(metrics)
 	report.WriteString(fmt.Sprintf("Performance Rating:   %s\n", rating))
-	
+
 	report.WriteString("\n")
 }
 
 // writeTimingAnalysis writes timing statistics
-func (pr *ProfileReporter) writeTimingAnalysis(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeTimingAnalysis(report *strings.Builder, metrics *ProfileMetrics) {
 	report.WriteString("TIMING ANALYSIS\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
 
@@ -102,14 +102,14 @@ func (pr *ProfileReporter) writeTimingAnalysis(report *strings.Builder, metrics 
 }
 
 // writeCheckPerformance writes individual check performance metrics
-func (pr *ProfileReporter) writeCheckPerformance(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeCheckPerformance(report *strings.Builder, metrics *ProfileMetrics) {
 	if len(metrics.CheckMetrics) == 0 {
 		return
 	}
 
 	report.WriteString("CHECK PERFORMANCE\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
-	report.WriteString(fmt.Sprintf("%-30s %10s %12s %12s %12s %8s\n", 
+	report.WriteString(fmt.Sprintf("%-30s %10s %12s %12s %12s %8s\n",
 		"Check Name", "Count", "Avg", "Min", "Max", "Success%"))
 	report.WriteString(strings.Repeat("-", 80) + "\n")
 
@@ -137,7 +137,7 @@ func (pr *ProfileReporter) writeCheckPerformance(report *strings.Builder, metric
 }
 
 // writeWorkerPerformance writes worker pool performance metrics
-func (pr *ProfileReporter) writeWorkerPerformance(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeWorkerPerformance(report *strings.Builder, metrics *ProfileMetrics) {
 	if len(metrics.WorkerMetrics) == 0 {
 		return
 	}
@@ -172,7 +172,7 @@ func (pr *ProfileReporter) writeWorkerPerformance(report *strings.Builder, metri
 	var totalJobs int64
 	var totalBusyTime time.Duration
 	var totalUtilization float64
-	
+
 	for _, worker := range workers {
 		totalJobs += worker.JobsProcessed
 		totalBusyTime += worker.TotalBusyTime
@@ -186,7 +186,7 @@ func (pr *ProfileReporter) writeWorkerPerformance(report *strings.Builder, metri
 			totalJobs,
 			totalBusyTime,
 			"-",
-			totalBusyTime / time.Duration(totalJobs),
+			totalBusyTime/time.Duration(totalJobs),
 			(totalUtilization/float64(len(workers)))*100,
 		))
 	}
@@ -195,7 +195,7 @@ func (pr *ProfileReporter) writeWorkerPerformance(report *strings.Builder, metri
 }
 
 // writeCategoryBreakdown writes performance breakdown by category
-func (pr *ProfileReporter) writeCategoryBreakdown(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeCategoryBreakdown(report *strings.Builder, metrics *ProfileMetrics) {
 	if len(metrics.CategoryMetrics) == 0 {
 		return
 	}
@@ -211,14 +211,14 @@ func (pr *ProfileReporter) writeCategoryBreakdown(report *strings.Builder, metri
 		Name    string
 		Metrics *CategoryMetrics
 	}, 0, len(metrics.CategoryMetrics))
-	
+
 	for name, catMetrics := range metrics.CategoryMetrics {
 		categories = append(categories, &struct {
 			Name    string
 			Metrics *CategoryMetrics
 		}{Name: name, Metrics: catMetrics})
 	}
-	
+
 	sort.Slice(categories, func(i, j int) bool {
 		return categories[i].Metrics.TotalDuration > categories[j].Metrics.TotalDuration
 	})
@@ -240,12 +240,12 @@ func (pr *ProfileReporter) writeCategoryBreakdown(report *strings.Builder, metri
 }
 
 // writeBottleneckAnalysis identifies and reports performance bottlenecks
-func (pr *ProfileReporter) writeBottleneckAnalysis(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeBottleneckAnalysis(report *strings.Builder, metrics *ProfileMetrics) {
 	report.WriteString("BOTTLENECK ANALYSIS\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
 
 	bottlenecks := pr.identifyBottlenecks(metrics)
-	
+
 	if len(bottlenecks) == 0 {
 		report.WriteString("No significant bottlenecks detected.\n")
 	} else {
@@ -264,7 +264,7 @@ func (pr *ProfileReporter) writeBottleneckAnalysis(report *strings.Builder, metr
 }
 
 // writeResourceUsage writes resource usage statistics
-func (pr *ProfileReporter) writeResourceUsage(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeResourceUsage(report *strings.Builder, metrics *ProfileMetrics) {
 	report.WriteString("RESOURCE USAGE\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
 
@@ -294,17 +294,17 @@ func (pr *ProfileReporter) writeResourceUsage(report *strings.Builder, metrics P
 }
 
 // writeProfilingOverhead writes profiling overhead analysis
-func (pr *ProfileReporter) writeProfilingOverhead(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeProfilingOverhead(report *strings.Builder, metrics *ProfileMetrics) {
 	report.WriteString("PROFILING OVERHEAD\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
 
 	overheadPercent := pr.profiler.GetOverheadPercentage()
 	overheadDuration := time.Duration(metrics.OverheadNanos)
-	
+
 	report.WriteString(fmt.Sprintf("Total Overhead:       %v\n", overheadDuration))
 	report.WriteString(fmt.Sprintf("Overhead Percentage:  %.2f%%\n", overheadPercent))
 	report.WriteString(fmt.Sprintf("Target Limit:         %.1f%%\n", pr.profiler.config.MaxOverhead*100))
-	
+
 	if pr.profiler.IsWithinOverheadLimit() {
 		report.WriteString("Status:               ✓ Within acceptable limits\n")
 	} else {
@@ -316,12 +316,12 @@ func (pr *ProfileReporter) writeProfilingOverhead(report *strings.Builder, metri
 }
 
 // writeRecommendations writes performance recommendations
-func (pr *ProfileReporter) writeRecommendations(report *strings.Builder, metrics ProfileMetrics) {
+func (pr *ProfileReporter) writeRecommendations(report *strings.Builder, metrics *ProfileMetrics) {
 	report.WriteString("RECOMMENDATIONS\n")
 	report.WriteString("-" + strings.Repeat("-", 78) + "\n")
 
 	recommendations := pr.generateRecommendations(metrics)
-	
+
 	if len(recommendations) == 0 {
 		report.WriteString("Performance is optimal. No recommendations at this time.\n")
 	} else {
@@ -345,14 +345,14 @@ func (pr *ProfileReporter) GenerateFlameGraph() ([]byte, error) {
 	// Simplified flame graph generation
 	// In production, you'd use a proper flame graph library
 	var buf bytes.Buffer
-	
+
 	buf.WriteString("# Flame Graph Data\n")
 	buf.WriteString("# Format: stack_trace count\n\n")
 
 	// Aggregate call stacks
 	stackCounts := make(map[string]int)
 	timings := pr.profiler.measurements.GetAll()
-	
+
 	for _, timing := range timings {
 		if timing != nil && len(timing.CallStack) > 0 {
 			stack := strings.Join(timing.CallStack, ";")
@@ -391,7 +391,7 @@ func (pr *ProfileReporter) GenerateSummary() string {
 // Helper functions
 
 // calculatePerformanceRating calculates an overall performance rating
-func (pr *ProfileReporter) calculatePerformanceRating(metrics ProfileMetrics) string {
+func (pr *ProfileReporter) calculatePerformanceRating(metrics *ProfileMetrics) string {
 	score := 100.0
 
 	// Deduct points for slow operations
@@ -446,7 +446,7 @@ type Bottleneck struct {
 }
 
 // identifyBottlenecks analyzes metrics to identify performance bottlenecks
-func (pr *ProfileReporter) identifyBottlenecks(metrics ProfileMetrics) []Bottleneck {
+func (pr *ProfileReporter) identifyBottlenecks(metrics *ProfileMetrics) []Bottleneck {
 	var bottlenecks []Bottleneck
 
 	// Check for slow checks
@@ -493,34 +493,34 @@ func (pr *ProfileReporter) identifyBottlenecks(metrics ProfileMetrics) []Bottlen
 }
 
 // generateRecommendations generates performance improvement recommendations
-func (pr *ProfileReporter) generateRecommendations(metrics ProfileMetrics) []string {
+func (pr *ProfileReporter) generateRecommendations(metrics *ProfileMetrics) []string {
 	var recommendations []string
 
 	// Check average duration
 	if metrics.AverageDuration > 100*time.Millisecond {
-		recommendations = append(recommendations, 
+		recommendations = append(recommendations,
 			"Average operation duration is high. Consider:\n"+
-			"   • Increasing parallelism\n"+
-			"   • Caching frequently accessed data\n"+
-			"   • Optimizing slow checks")
+				"   • Increasing parallelism\n"+
+				"   • Caching frequently accessed data\n"+
+				"   • Optimizing slow checks")
 	}
 
 	// Check accuracy
 	if metrics.AccuracyAchieved > 5*time.Millisecond {
 		recommendations = append(recommendations,
 			"Timing accuracy is below target. Consider:\n"+
-			"   • Using higher precision timers\n"+
-			"   • Reducing system load during profiling\n"+
-			"   • Adjusting sampling rate")
+				"   • Using higher precision timers\n"+
+				"   • Reducing system load during profiling\n"+
+				"   • Adjusting sampling rate")
 	}
 
 	// Check overhead
 	if pr.profiler.GetOverheadPercentage() > 5 {
 		recommendations = append(recommendations,
 			"Profiling overhead is high. Consider:\n"+
-			"   • Reducing profiling detail level\n"+
-			"   • Sampling instead of full profiling\n"+
-			"   • Disabling call stack capture")
+				"   • Reducing profiling detail level\n"+
+				"   • Sampling instead of full profiling\n"+
+				"   • Disabling call stack capture")
 	}
 
 	// Check for failed operations

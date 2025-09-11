@@ -24,7 +24,7 @@
 //       MaxRetries: 3,
 //       BackoffStrategy: ExponentialBackoff,
 //   })
-//   
+//
 //   result, err := recovery.ExecuteWithRecovery(ctx, operation)
 //   if err != nil {
 //       recovery.HandleError(ctx, err)
@@ -68,25 +68,25 @@ type ErrorRecovery struct {
 // and performance tuning parameters.
 type RecoveryConfig struct {
 	// Retry configuration
-	MaxRetries      int           // Maximum number of retry attempts
-	BaseDelay       time.Duration // Initial retry delay
-	MaxDelay        time.Duration // Maximum retry delay
+	MaxRetries      int             // Maximum number of retry attempts
+	BaseDelay       time.Duration   // Initial retry delay
+	MaxDelay        time.Duration   // Maximum retry delay
 	BackoffStrategy BackoffStrategy // Retry backoff strategy
-	
+
 	// Circuit breaker configuration
-	FailureThreshold    int           // Failures before circuit opens
-	RecoveryTimeout     time.Duration // Time before attempting recovery
-	ConsecutiveSuccesses int          // Successes needed to close circuit
-	
+	FailureThreshold     int           // Failures before circuit opens
+	RecoveryTimeout      time.Duration // Time before attempting recovery
+	ConsecutiveSuccesses int           // Successes needed to close circuit
+
 	// Cleanup configuration
-	CleanupTimeout      time.Duration // Timeout for cleanup operations
-	AutoCleanup         bool          // Enable automatic resource cleanup
-	PreserveDebugData   bool          // Keep data for debugging
-	
+	CleanupTimeout    time.Duration // Timeout for cleanup operations
+	AutoCleanup       bool          // Enable automatic resource cleanup
+	PreserveDebugData bool          // Keep data for debugging
+
 	// Degradation configuration
-	EnableDegradation   bool          // Allow graceful degradation
-	MinimalChecksOnly   bool          // Run only essential checks
-	PartialResultsOK    bool          // Accept partial diagnostic results
+	EnableDegradation bool // Allow graceful degradation
+	MinimalChecksOnly bool // Run only essential checks
+	PartialResultsOK  bool // Accept partial diagnostic results
 }
 
 // BackoffStrategy defines retry delay calculation methods
@@ -132,8 +132,8 @@ func NewErrorRecovery(client *docker.Client, config *RecoveryConfig) *ErrorRecov
 	}
 
 	recovery := &ErrorRecovery{
-		client:  client,
-		config:  config,
+		client: client,
+		config: config,
 		metrics: &RecoveryMetrics{
 			ErrorsByType:     make(map[ErrorType]int64),
 			ErrorsByCode:     make(map[ErrorCode]int64),
@@ -158,8 +158,8 @@ func NewErrorRecovery(client *docker.Client, config *RecoveryConfig) *ErrorRecov
 
 	// Initialize cleanup manager
 	recovery.cleanupManager = NewResourceCleanupManager(&CleanupConfig{
-		Timeout:         config.CleanupTimeout,
-		AutoCleanup:     config.AutoCleanup,
+		Timeout:           config.CleanupTimeout,
+		AutoCleanup:       config.AutoCleanup,
 		PreserveDebugData: config.PreserveDebugData,
 	})
 
@@ -171,11 +171,11 @@ func NewErrorRecovery(client *docker.Client, config *RecoveryConfig) *ErrorRecov
 // and automatic error handling.
 //
 // The execution flow:
-//   1. Check circuit breaker state
-//   2. Execute operation with retry policy
-//   3. Handle errors with recovery strategies
-//   4. Update circuit breaker state
-//   5. Perform cleanup if necessary
+//  1. Check circuit breaker state
+//  2. Execute operation with retry policy
+//  3. Handle errors with recovery strategies
+//  4. Update circuit breaker state
+//  5. Perform cleanup if necessary
 //
 // Parameters:
 //   - ctx: Context for timeout and cancellation
@@ -195,9 +195,9 @@ func (er *ErrorRecovery) ExecuteWithRecovery(ctx context.Context, operation Reco
 		er.metrics.CircuitBreakerBlocks++
 		er.mu.Unlock()
 		return nil, &DiagnosticError{
-			Code:    ErrCodeCircuitBreakerOpen,
-			Type:    ErrTypeSystem,
-			Message: "Circuit breaker is open, operation blocked",
+			Code:     ErrCodeCircuitBreakerOpen,
+			Type:     ErrTypeSystem,
+			Message:  "Circuit breaker is open, operation blocked",
 			Severity: SeverityCritical,
 			Context: map[string]interface{}{
 				"circuit_state": er.circuitBreaker.GetState(),
@@ -246,7 +246,7 @@ func (er *ErrorRecovery) ExecuteWithRecovery(ctx context.Context, operation Reco
 			}
 			return nil, fmt.Errorf("operation failed and recovery unsuccessful: %w (recovery: %v)", err, recoveryErr)
 		}
-		
+
 		// Recovery succeeded, update metrics
 		er.mu.Lock()
 		er.metrics.SuccessfulRecoveries++
@@ -284,7 +284,7 @@ func (er *ErrorRecovery) HandleError(ctx context.Context, err error) error {
 
 	// Classify error and determine recovery strategy
 	diagError := er.classifyError(err)
-	
+
 	er.mu.Lock()
 	er.metrics.ErrorsByType[diagError.Type]++
 	er.mu.Unlock()
@@ -327,7 +327,7 @@ func (er *ErrorRecovery) classifyError(err error) *DiagnosticError {
 
 	// Analyze error patterns to classify
 	errorMsg := err.Error()
-	
+
 	// Docker daemon connectivity issues
 	if isDockerConnectionError(errorMsg) {
 		return &DiagnosticError{
@@ -467,9 +467,9 @@ func (er *ErrorRecovery) selectRecoveryStrategy(diagError *DiagnosticError) *Rec
 	switch diagError.Type {
 	case ErrTypeConnection:
 		return &RecoveryStrategy{
-			RetryWithBackoff: true,
+			RetryWithBackoff:  true,
 			BackoffMultiplier: 2.0,
-			MaxRetries: er.config.MaxRetries,
+			MaxRetries:        er.config.MaxRetries,
 			Immediate: []string{
 				"Attempt to reconnect to Docker daemon",
 				"Wait for daemon to become available",
@@ -478,7 +478,7 @@ func (er *ErrorRecovery) selectRecoveryStrategy(diagError *DiagnosticError) *Rec
 	case ErrTypeResource:
 		return &RecoveryStrategy{
 			CleanupResources: true,
-			GracefulDegrade: er.config.EnableDegradation,
+			GracefulDegrade:  er.config.EnableDegradation,
 			Immediate: []string{
 				"Clean up unused resources",
 				"Run minimal diagnostic checks",
@@ -487,7 +487,7 @@ func (er *ErrorRecovery) selectRecoveryStrategy(diagError *DiagnosticError) *Rec
 	case ErrTypeNetwork:
 		return &RecoveryStrategy{
 			RetryWithBackoff: true,
-			NetworkRecovery: true,
+			NetworkRecovery:  true,
 			Immediate: []string{
 				"Reset network connections",
 				"Verify network configuration",
@@ -496,7 +496,7 @@ func (er *ErrorRecovery) selectRecoveryStrategy(diagError *DiagnosticError) *Rec
 	default:
 		return &RecoveryStrategy{
 			RetryWithBackoff: true,
-			MaxRetries: 1, // Limited retries for unknown errors
+			MaxRetries:       1, // Limited retries for unknown errors
 		}
 	}
 }
@@ -536,14 +536,14 @@ func (er *ErrorRecovery) executeRecoveryStrategy(ctx context.Context, strategy *
 func (er *ErrorRecovery) GetMetrics() RecoveryMetrics {
 	er.mu.RLock()
 	defer er.mu.RUnlock()
-	
+
 	// Create a copy to avoid data races
 	metrics := *er.metrics
-	
+
 	// Add circuit breaker metrics
 	metrics.CircuitBreakerState = er.circuitBreaker.GetState()
 	metrics.CircuitBreakerFailures = er.circuitBreaker.GetFailureCount()
-	
+
 	return metrics
 }
 
@@ -551,12 +551,12 @@ func (er *ErrorRecovery) GetMetrics() RecoveryMetrics {
 func (er *ErrorRecovery) IsHealthy() bool {
 	er.mu.RLock()
 	defer er.mu.RUnlock()
-	
+
 	// Check if circuit breaker is not permanently open
 	if er.circuitBreaker.GetState() == CircuitStateOpen {
 		return false
 	}
-	
+
 	// Check error rate
 	if er.metrics.TotalOperations > 10 {
 		errorRate := float64(er.metrics.TotalFailures) / float64(er.metrics.TotalOperations)
@@ -564,32 +564,32 @@ func (er *ErrorRecovery) IsHealthy() bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 // Shutdown performs graceful shutdown of the error recovery system.
 func (er *ErrorRecovery) Shutdown(ctx context.Context) error {
 	var errors []error
-	
+
 	// Shutdown cleanup manager
 	if er.cleanupManager != nil {
 		if err := er.cleanupManager.Shutdown(ctx); err != nil {
 			errors = append(errors, fmt.Errorf("cleanup manager shutdown failed: %w", err))
 		}
 	}
-	
+
 	// Final cleanup if needed
 	if er.config.AutoCleanup {
 		if err := er.cleanupManager.PerformFinalCleanup(ctx); err != nil {
 			errors = append(errors, fmt.Errorf("final cleanup failed: %w", err))
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("shutdown errors: %v", errors)
 	}
-	
+
 	return nil
 }
 
@@ -603,7 +603,7 @@ func isDockerConnectionError(errorMsg string) bool {
 		"daemon not running",
 		"permission denied",
 	}
-	
+
 	for _, pattern := range connectionPatterns {
 		if containsString(errorMsg, pattern) {
 			return true
@@ -620,7 +620,7 @@ func isResourceExhaustionError(errorMsg string) bool {
 		"too many open files",
 		"cannot allocate memory",
 	}
-	
+
 	for _, pattern := range resourcePatterns {
 		if containsString(errorMsg, pattern) {
 			return true
@@ -637,7 +637,7 @@ func isNetworkError(errorMsg string) bool {
 		"network unreachable",
 		"dns resolution failed",
 	}
-	
+
 	for _, pattern := range networkPatterns {
 		if containsString(errorMsg, pattern) {
 			return true
@@ -674,12 +674,12 @@ func detectNetworkIssueType(errorMsg string) string {
 
 func containsString(s, substr string) bool {
 	// Simple case-insensitive contains
-	return len(s) >= len(substr) && 
-		(s == substr || 
-		 (len(s) > len(substr) && 
-		  (s[:len(substr)] == substr || 
-		   s[len(s)-len(substr):] == substr || 
-		   indexSubstring(s, substr) >= 0)))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					indexSubstring(s, substr) >= 0)))
 }
 
 func indexSubstring(s, substr string) int {
@@ -700,7 +700,7 @@ func (er *ErrorRecovery) recoverDockerConnection(ctx context.Context) error {
 			return nil // Connection recovered
 		}
 	}
-	
+
 	// Wait and retry
 	select {
 	case <-time.After(2 * time.Second):
@@ -710,7 +710,7 @@ func (er *ErrorRecovery) recoverDockerConnection(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	
+
 	return fmt.Errorf("docker connection recovery failed")
 }
 
